@@ -1,73 +1,52 @@
+# Docker Compose for VPS Hosting with Nginx Proxy
+version: "3.4"
+
 services:
   api:
-    build:
-      context: .
-      dockerfile: Dockerfile.multi
-      target: api-build
-    # image: ghcr.io/danny-avila/librechat-dev-api:latest
-    container_name: LibreChat-API
-    ports:
-      - 3080:3080
-    depends_on:
-      - mongodb
-      - rag_api
+    image: ghcr.io/danny-avila/librechat-dev:latest
+    container_name: LibreChat
     restart: always
-    extra_hosts:
-    - "host.docker.internal:host-gateway"
-    env_file:
-      - .env
     environment:
       - HOST=0.0.0.0
-      - NODE_ENV=production
       - MONGO_URI=mongodb://mongodb:27017/LibreChat
       - MEILI_HOST=http://meilisearch:7700
       - RAG_PORT=${RAG_PORT:-8000}
       - RAG_API_URL=http://rag_api:${RAG_PORT:-8000}
+      - DOMAIN_CLIENT=https://jvteststock.com
+      - DOMAIN_SERVER=https://jvteststock.com
+    env_file:
+      - .env
     volumes:
-      - type: bind
-        source: ./librechat.yaml
-        target: /app/librechat.yaml
-      - ./mcp-local:/app/mcp-local
-      - ./data:/app/data
+      - ./librechat.yaml:/app/librechat.yaml
       - ./images:/app/client/public/images
       - ./uploads:/app/uploads
-      - ./logs:/app/api/logs
-
-  client:
-    image: nginx:1.27.0-alpine
-    container_name: LibreChat-NGINX
-    ports:
-      - 80:80
-      - 443:443
+      - ./logs:/app/logs
+      - ./mcp-local:/app/mcp-local
     depends_on:
-      - api
-    restart: always
-    volumes:
-      - ./client/nginx.conf:/etc/nginx/conf.d/default.conf
-      - ./certs:/etc/nginx/certs
+      - mongodb
+      - rag_api
+
   mongodb:
     container_name: chat-mongodb
-    # ports:  # Uncomment this to access mongodb from outside docker, not safe in deployment
-    #   - 27018:27017
     image: mongo
     restart: always
     volumes:
       - ./data-node:/data/db
     command: mongod --noauth
+
   meilisearch:
     container_name: chat-meilisearch
     image: getmeili/meilisearch:v1.12.3
     restart: always
-    # ports: # Uncomment this to access meilisearch from outside docker
-    #   - 7700:7700 # if exposing these ports, make sure your master key is not the default value
-    env_file:
-      - .env
     environment:
       - MEILI_HOST=http://meilisearch:7700
       - MEILI_NO_ANALYTICS=true
+      - MEILI_MASTER_KEY=${MEILI_MASTER_KEY}
     volumes:
       - ./meili_data_v1.12:/meili_data
+
   vectordb:
+    container_name: vectordb
     image: pgvector/pgvector:0.8.0-pg15-trixie
     environment:
       POSTGRES_DB: mydatabase
@@ -76,7 +55,9 @@ services:
     restart: always
     volumes:
       - pgdata2:/var/lib/postgresql/data
+
   rag_api:
+    container_name: rag_api
     image: ghcr.io/danny-avila/librechat-rag-api-dev-lite:latest
     environment:
       - DB_HOST=vectordb
@@ -86,6 +67,19 @@ services:
       - vectordb
     env_file:
       - .env
+
+  nginx:
+    image: nginx:1.27.0-alpine
+    container_name: LibreChat-NGINX
+    ports:
+      - 80:80
+      - 443:443
+    restart: always
+    volumes:
+      - ./client/nginx.conf:/etc/nginx/conf.d/default.conf
+      - ./certs:/etc/nginx/certs
+    depends_on:
+      - api
 
 volumes:
   pgdata2:

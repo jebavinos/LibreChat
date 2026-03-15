@@ -73,12 +73,48 @@ export const codeNoExecution: React.ElementType = memo(({ className, children }:
 type TAnchorProps = {
   href: string;
   children: React.ReactNode;
+  target?: string;
+  rel?: string;
 };
 
-export const a: React.ElementType = memo(({ href, children }: TAnchorProps) => {
+export const a: React.ElementType = memo(({ href, children, target, rel }: TAnchorProps) => {
   const user = useRecoilValue(store.user);
   const { showToast } = useToastContext();
   const localize = useLocalize();
+
+  const isInteractiveChart = useMemo(() => {
+    if (!href) {
+      return false;
+    }
+    // Check for interactive chart link from python-interpreter
+    return (
+      (href.includes('/app/plots/') || href.includes('/data/')) &&
+      href.toLowerCase().includes('.html')
+    );
+  }, [href]);
+
+  if (isInteractiveChart) {
+    return (
+      <div className="interactive-chart-container relative mb-4 h-[600px] w-full overflow-hidden rounded border border-gray-300 dark:border-gray-600">
+        <iframe
+          src={href}
+          title="Interactive Chart"
+          className="h-full w-full border-none bg-white"
+          sandbox="allow-scripts allow-same-origin allow-popups"
+        />
+        <div className="absolute bottom-0 right-0 bg-white/80 p-2 text-xs text-black dark:bg-black/50 dark:text-white">
+          <a
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:underline"
+          >
+            Open in New Tab ↗
+          </a>
+        </div>
+      </div>
+    );
+  }
 
   const {
     file_id = '',

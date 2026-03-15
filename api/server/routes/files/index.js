@@ -17,6 +17,16 @@ const speech = require('./speech');
 
 const initialize = async () => {
   const router = express.Router();
+  
+  if (!requireJwtAuth) console.error('requireJwtAuth is UNDEFINED in files/index.js');
+  if (!configMiddleware) console.error('configMiddleware is UNDEFINED in files/index.js');
+  if (!checkBan) console.error('checkBan is UNDEFINED in files/index.js');
+  if (!uaParser) console.error('uaParser is UNDEFINED in files/index.js');
+  if (!images) console.error('images is UNDEFINED in files/index.js');
+  if (!files) console.error('files is UNDEFINED in files/index.js');
+  if (!avatar) console.error('avatar is UNDEFINED in files/index.js');
+  if (!speech) console.error('speech is UNDEFINED in files/index.js');
+
   router.use(requireJwtAuth);
   router.use(configMiddleware);
   router.use(checkBan);

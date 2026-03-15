@@ -84,7 +84,11 @@
     "migrate:agent-permissions:batch": "node config/migrate-agent-permissions.js --batch-size=50",
     "migrate:prompt-permissions:dry-run": "node config/migrate-prompt-permissions.js --dry-run",
     "migrate:prompt-permissions": "node config/migrate-prompt-permissions.js",
-    "migrate:prompt-permissions:batch": "node config/migrate-prompt-permissions.js --batch-size=50"
+    "migrate:prompt-permissions:batch": "node config/migrate-prompt-permissions.js --batch-size=50",
+    "cleanup:convos": "node scripts/cleanup-conversations.js",
+    "cleanup:logs": "node scripts/cleanup-logs.js",
+    "cleanup:datafolder": "node scripts/cleanup-data-folder.js",
+    "cleanup": "npm run cleanup:convos && npm run cleanup:logs && npm run cleanup:datafolder"
   },
   "repository": {
     "type": "git",

@@ -1,4 +1,5 @@
 const accessPermissions = require('./accessPermissions');
+const payment = require('./payment');
 const assistants = require('./assistants');
 const categories = require('./categories');
 const endpoints = require('./endpoints');
@@ -22,6 +23,7 @@ const files = require('./files');
 const share = require('./share');
 const tags = require('./tags');
 const auth = require('./auth');
+console.log('Routes auth export:', auth);
 const edit = require('./edit');
 const keys = require('./keys');
 const user = require('./user');
@@ -29,6 +31,7 @@ const mcp = require('./mcp');
 
 module.exports = {
   mcp,
+  payment,
   edit,
   auth,
   keys,

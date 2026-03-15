@@ -15,6 +15,7 @@ import MarkdownErrorBoundary from './MarkdownErrorBoundary';
 import { langSubset, preprocessLaTeX } from '~/utils';
 import { unicodeCitation } from '~/components/Web';
 import { code, a, p, img } from './MarkdownComponents';
+import { remarkToolResult } from './remarkToolResult';
 import store from '~/store';
 
 type TContentProps = {
@@ -51,6 +52,7 @@ const Markdown = memo(({ content = '', isLatestMessage }: TContentProps) => {
   const remarkPlugins: Pluggable[] = [
     supersub,
     remarkGfm,
+    remarkToolResult,
     remarkDirective,
     artifactPlugin,
     [remarkMath, { singleDollarTextMath: false }],

@@ -16,7 +16,10 @@ const {
   performStartupChecks,
   handleJsonParseError,
   initializeFileStorage,
+  // GenerationJobManager,
+  // createStreamServices,
 } = require('@librechat/api');
+
 const { connectDb, indexSync } = require('~/db');
 const initializeOAuthReconnectManager = require('./services/initializeOAuthReconnectManager');
 const createValidateImageRequest = require('./middleware/validateImageRequest');
@@ -76,53 +79,63 @@ const startServer = async () => {
     }
   }
 
-  app.get('/health', (_req, res) => res.status(200).send('OK'));
-
-  /* Middleware */
   app.use(noIndex);
   app.use(express.json({ limit: '3mb' }));
   app.use(express.urlencoded({ extended: true, limit: '3mb' }));
   app.use(handleJsonParseError);
+
+  app.use((req, _res, next) => {
+    const start = Date.now();
+    _res.on('finish', async () => {
+      const duration = Date.now() - start;
+      logger.info(
+        `${req.method} ${req.originalUrl} ${_res.statusCode} - ${duration}ms`,
+        {
+          requestId: req.headers['x-request-id'] || req.id,
+          userId: req.user ? req.user.id : null,
+        },
+      );
+    });
+    next();
+  });
+
   app.use(mongoSanitize());
   app.use(cors());
   app.use(cookieParser());
 
-  if (!isEnabled(DISABLE_COMPRESSION)) {
-    app.use(compression());
-  } else {
-    console.warn('Response compression has been disabled via DISABLE_COMPRESSION.');
+  if (trusted_proxy) {
+    app.enable('trust proxy');
   }
+
+  app.use(compression());
 
   app.use(staticCache(appConfig.paths.dist));
   app.use(staticCache(appConfig.paths.fonts));
   app.use(staticCache(appConfig.paths.assets));
 
-  if (!ALLOW_SOCIAL_LOGIN) {
-    console.warn('Social logins are disabled. Set ALLOW_SOCIAL_LOGIN=true to enable them.');
-  }
-
-  /* OAUTH */
   app.use(passport.initialize());
   passport.use(jwtLogin());
   passport.use(passportLogin());
 
-  /* LDAP Auth */
-  if (process.env.LDAP_URL && process.env.LDAP_USER_SEARCH_BASE) {
+  if (process.env.LDAP_URL && process.env.LDAP_USER_DN && process.env.LDAP_USER_SEARCH_BASE) {
     passport.use(ldapLogin);
   }
-
+  
   if (isEnabled(ALLOW_SOCIAL_LOGIN)) {
     await configureSocialLogins(app);
   }
 
   app.use('/oauth', routes.oauth);
+  
   /* API Endpoints */
   app.use('/api/auth', routes.auth);
+  // app.use('/api/admin', routes.adminAuth);
   app.use('/api/actions', routes.actions);
+
   app.use('/api/keys', routes.keys);
+  // app.use('/api/api-keys', routes.apiKeys);
   app.use('/api/user', routes.user);
   app.use('/api/search', routes.search);
-  app.use('/api/edit', routes.edit);
   app.use('/api/messages', routes.messages);
   app.use('/api/convos', routes.convos);
   app.use('/api/presets', routes.presets);
@@ -131,11 +144,13 @@ const startServer = async () => {
   app.use('/api/endpoints', routes.endpoints);
   app.use('/api/balance', routes.balance);
   app.use('/api/models', routes.models);
-  app.use('/api/plugins', routes.plugins);
   app.use('/api/config', routes.config);
   app.use('/api/assistants', routes.assistants);
+  
   app.use('/api/files', await routes.files.initialize());
+  
   app.use('/images/', createValidateImageRequest(appConfig.secureImageLinks), routes.staticRoute);
+  
   app.use('/api/share', routes.share);
   app.use('/api/roles', routes.roles);
   app.use('/api/agents', routes.agents);
@@ -145,6 +160,15 @@ const startServer = async () => {
 
   app.use('/api/tags', routes.tags);
   app.use('/api/mcp', routes.mcp);
+
+  // Serve files from /app/data
+  app.use('/data', express.static('/app/data'));
+
+  // Also serve files from /app/data to matching the absolute path returned by tools
+  app.use('/app/data', express.static('/app/data'));
+
+  // Also serve files from /app/plots for absolute paths
+  app.use('/app/plots', express.static('/app/plots'));
 
   app.use(ErrorController);
 
@@ -163,7 +187,12 @@ const startServer = async () => {
     res.send(updatedIndexHtml);
   });
 
-  app.listen(port, host, async () => {
+  app.listen(port, host, async (err) => {
+    if (err) {
+      logger.error('Failed to start server:', err);
+      process.exit(1);
+    }
+
     if (host === '0.0.0.0') {
       logger.info(
         `Server listening on all interfaces at port ${port}. Use http://localhost:${port} to access it`,
@@ -175,6 +204,11 @@ const startServer = async () => {
     await initializeMCPs();
     await initializeOAuthReconnectManager();
     await checkMigrations();
+
+    // Configure stream services (auto-detects Redis from USE_REDIS env var)
+    // const streamServices = createStreamServices();
+    // GenerationJobManager.configure(streamServices);
+    // GenerationJobManager.initialize();
   });
 };
 
@@ -222,6 +256,15 @@ process.on('uncaughtException', (err) => {
         stack: err.stack,
       },
     );
+    return;
+  }
+
+  if (isEnabled(process.env.CONTINUE_ON_UNCAUGHT_EXCEPTION)) {
+    logger.error('Unhandled error encountered. The app will continue running.', {
+      name: err?.name,
+      message: err?.message,
+      stack: err?.stack,
+    });
     return;
   }
 

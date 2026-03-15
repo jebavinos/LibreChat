@@ -1,14 +1,46 @@
 # v0.8.1
 
 # Base node image
-FROM node:20-alpine AS node
+FROM node:20-slim AS node
 
-# Install jemalloc
-RUN apk add --no-cache jemalloc
-RUN apk add --no-cache python3 py3-pip uv
+# Install dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libjemalloc2 \
+    python3 \
+    python3-pip \
+    python3-venv \
+    curl \
+    ca-certificates \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install graphics and chromium dependencies for plotly/kaleido
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    chromium \
+    libnss3 \
+    libfreetype6 \
+    libharfbuzz0b \
+    fonts-freefont-ttf \
+    libgl1-mesa-glx \
+    libegl1-mesa \
+    libgbm1 \
+    libcups2 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxfixes3 \
+    libxrandr2 \
+    libxkbcommon0 \
+    libpango-1.0-0 \
+    libcairo2 \
+    libasound2 \
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libdrm2 \
+    libxshmfence1 \
+    && rm -rf /var/lib/apt/lists/*
 
 # Set environment variable to use jemalloc
-ENV LD_PRELOAD=/usr/lib/libjemalloc.so.2
+ENV LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libjemalloc.so.2
 
 # Add `uv` for extended MCP support
 COPY --from=ghcr.io/astral-sh/uv:0.6.13 /uv /uvx /bin/
@@ -34,11 +66,14 @@ RUN \
     npm config set fetch-retry-maxtimeout 600000 ; \
     npm config set fetch-retries 5 ; \
     npm config set fetch-retry-mintimeout 15000 ; \
-    npm ci --no-audit
+    npm install --no-audit
 
 COPY --chown=node:node . .
 
 RUN \
+    # Build shared packages
+    npm run build --workspace packages/data-provider; \
+    npm run build --workspace packages/api; \
     # React client build
     NODE_OPTIONS="--max-old-space-size=2048" npm run frontend; \
     npm prune --production; \

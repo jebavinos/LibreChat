@@ -49,6 +49,9 @@ RUN uv --version
 RUN mkdir -p /app && chown node:node /app
 WORKDIR /app
 
+COPY mcp-local/requirements.txt /app/mcp-local/requirements.txt
+RUN pip3 install -r /app/mcp-local/requirements.txt --break-system-packages
+
 USER node
 
 COPY --chown=node:node package.json package-lock.json ./

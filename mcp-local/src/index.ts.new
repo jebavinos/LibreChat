@@ -1,0 +1,354 @@
+// @ts-nocheck
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import {
+  CallToolRequestSchema,
+  ListToolsRequestSchema,
+  ErrorCode,
+  McpError
+} from "@modelcontextprotocol/sdk/types.js";
+import { z } from "zod";
+import pg from "pg";
+import { spawn } from "child_process";
+import fs from "fs";
+import fsPromises from "fs/promises";
+import path from "path";
+import { fileURLToPath } from 'url';
+import dotenv from "dotenv";
+
+const { Pool } = pg;
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Ensure .env is loaded
+dotenv.config({ path: path.resolve(__dirname, "../.env") });
+dotenv.config(); // Fallback
+
+// DB Connection
+const pool = new Pool({
+  host: process.env.POSTGRES_HOST,
+  port: parseInt(process.env.POSTGRES_PORT || "5432"),
+  user: process.env.POSTGRES_USER,
+  password: process.env.POSTGRES_PASSWORD,
+  database: process.env.POSTGRES_DB,
+});
+
+const server = new Server(
+  {
+    name: "live-data-postgres-server",
+    version: "1.0.0",
+  },
+  {
+    capabilities: {
+      tools: {},
+    },
+  }
+);
+
+// --- Helper Functions ---
+
+async function refreshAuthToken(verbose = false) {
+    const scriptPath = path.resolve(__dirname, "refresh_token.py");
+    if (verbose) console.error(`[LiveDataAuth] Starting token refresh via ${scriptPath}...`);
+
+    return new Promise((resolve) => {
+        const proc = spawn("python3", [scriptPath], {
+            env: process.env,
+            cwd: path.dirname(scriptPath)
+        });
+
+        let output = "";
+        let errorOutput = "";
+
+        proc.stdout.on("data", (data) => { output += data.toString(); });
+        proc.stderr.on("data", (data) => { errorOutput += data.toString(); });
+
+        proc.on("close", (code) => {
+            if (code === 0) {
+                 if (verbose) console.error(`[LiveDataAuth] Token refreshed successfully.`);
+                 resolve({ success: true, output });
+            } else {
+                 if (verbose) console.error(`[LiveDataAuth] Token refresh failed (code ${code}). Error: ${errorOutput}`);
+                 resolve({ success: false, output, error: errorOutput });
+            }
+        });
+    });
+}
+
+function startTokenMaintenance() {
+    // Refresh every 30 minutes
+    const INTERVAL = 30 * 60 * 1000; 
+    console.error("[LiveDataAuth] Starting periodic token maintenance (every 30m)...");
+    
+    // Initial run in background
+    refreshAuthToken(true).catch(err => console.error("[LiveDataAuth] Initial refresh error:", err));
+
+    setInterval(async () => {
+        try {
+            console.error("[LiveDataAuth] Interval reached. Refreshing token...");
+            await refreshAuthToken(true);
+        } catch (err) {
+            console.error("[LiveDataAuth] Background refresh error:", err);
+        }
+    }, INTERVAL);
+}
+
+async function startLiveTicker() {
+  const tickerScriptPath = path.resolve(__dirname, "live-data-ticker.ts");
+  const tsxPath = path.resolve(__dirname, "../node_modules/tsx/dist/cli.mjs");
+  
+  // Use tsx directly to execute the typescript file
+  const child = spawn("node", [tsxPath, tickerScriptPath], {
+    cwd: path.dirname(tickerScriptPath),
+    stdio: "ignore", 
+    detached: true,
+    env: process.env
+  });
+  
+  child.unref(); // Allow parent to exit without waiting for child.
+  return {
+    content: [{ type: "text", text: `Started Live Data Ticker (PID: ${child.pid}) in background.` }],
+  };
+}
+
+// --- Tools ---
+
+server.setRequestHandler(ListToolsRequestSchema, async () => {
+  return {
+    tools: [
+      {
+        name: "query",
+        description: "Run a read-only SQL query on the PostgreSQL database",
+        inputSchema: {
+          type: "object",
+          properties: {
+            sql: { type: "string", description: "The SQL query to execute" }
+          },
+          required: ["sql"]
+        }
+      },
+      {
+        name: "list_tables",
+        description: "List all tables in the database",
+        inputSchema: {
+          type: "object",
+          properties: {}
+        }
+      },
+      {
+        name: "start_live_ticker",
+        description: "Start the Live Data Ticker background process",
+        inputSchema: {
+          type: "object",
+          properties: {}
+        }
+      },
+      {
+        name: "refresh_live_token",
+        description: "Manually trigger a Live Data token refresh",
+        inputSchema: {
+          type: "object",
+          properties: {}
+        }
+      },
+      {
+        name: "get_historical_data",
+        description: "Get historical tick data from the database",
+        inputSchema: {
+          type: "object",
+          properties: {
+             instrument_token: { type: "string", description: "Instrument token to filter by" },
+             start_date: { type: "string", description: "Start date (ISO format)" },
+             end_date: { type: "string", description: "End date (ISO format)" },
+             limit: { type: "number", description: "Max rows to return (default 1000)" },
+             format: { type: "string", enum: ["json", "csv"], description: "Output format (default: json)" }
+          },
+        }
+      }
+    ]
+  };
+});
+
+server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  const { name, arguments: args } = request.params;
+
+  if (name === "query") {
+    // Basic safety check for read-only query
+    const normalizedSql = args.sql.trim().toLowerCase();
+    if (!normalizedSql.startsWith("select") && !normalizedSql.startsWith("with")) {
+        return {
+            content: [{ type: "text", text: "Only SELECT or WITH queries are allowed for safety." }],
+            isError: true,
+        };
+    }
+    const client = await pool.connect();
+    try {
+        const result = await client.query(args.sql);
+        return {
+            content: [{ type: "text", text: JSON.stringify(result.rows, null, 2) }],
+        };
+    } catch (err) {
+        return {
+            content: [{ type: "text", text: `Error executing query: ${err.message}` }],
+            isError: true,
+        };
+    } finally {
+        client.release();
+    }
+  }
+
+  if (name === "list_tables") {
+      const client = await pool.connect();
+      try {
+          const result = await client.query(`
+              SELECT table_name
+              FROM information_schema.tables
+              WHERE table_schema = 'public'
+              AND table_type = 'BASE TABLE';
+          `);
+          return {
+              content: [{ type: "text", text: JSON.stringify(result.rows, null, 2) }],
+          };
+      } catch (err) {
+          return {
+              content: [{ type: "text", text: `Error listing tables: ${err.message}` }],
+              isError: true,
+          };
+      } finally {
+          client.release();
+      }
+  }
+
+  if (name === "start_live_ticker") {
+      try {
+          return await startLiveTicker();
+      } catch (err) {
+          return {
+              content: [{ type: "text", text: `Error starting ticker: ${err.message}` }],
+              isError: true,
+          };
+      }
+  }
+
+  if (name === "refresh_live_token") {
+      const result = await refreshAuthToken(true);
+      if (result.success) {
+          return {
+              content: [{ type: "text", text: `Token Refreshed.\n${result.output}` }],
+          };
+      } else {
+          return {
+              content: [{ type: "text", text: `Token Refresh Failed.\n${result.error}` }],
+              isError: true,
+          };
+      }
+  }
+
+  if (name === "get_historical_data") {
+      const { instrument_token, start_date, end_date, limit, format } = args;
+      
+      let query = `SELECT * FROM live_ticks WHERE 1=1`;
+      const params = [];
+      let paramIdx = 1;
+
+      if (instrument_token) {
+          query += ` AND instrument_token = $${paramIdx++}`;
+          params.push(instrument_token);
+      }
+      if (start_date) {
+          query += ` AND exchange_timestamp >= $${paramIdx++}`;
+          params.push(start_date);
+      }
+      if (end_date) {
+          query += ` AND exchange_timestamp <= $${paramIdx++}`;
+          params.push(end_date);
+      }
+      
+      query += ` ORDER BY exchange_timestamp DESC`;
+      if (limit) {
+          query += ` LIMIT $${paramIdx++}`;
+          params.push(limit);
+      } else {
+          query += ` LIMIT 1000`;
+      }
+
+      const client = await pool.connect();
+      try {
+          const result = await client.query(query, params);
+          
+          if (format === 'csv') {
+              if (result.rows.length === 0) {
+                  return { content: [{ type: "text", text: "No data found." }] };
+              }
+              const headers = Object.keys(result.rows[0]);
+              const csvRows = result.rows.map(row => 
+                  headers.map(fieldName => {
+                      const val = row[fieldName];
+                      if (val instanceof Date) return val.toISOString();
+                      if (val === null || val === undefined) return '';
+                      return String(val); 
+                  }).join(',')
+              );
+              const content = [headers.join(','), ...csvRows].join('\n');
+              
+              // Save to /app/data or /tmp
+              const dataDir = '/app/data';
+              if (!fs.existsSync(dataDir)) {
+                  try {
+                      fs.mkdirSync(dataDir, { recursive: true });
+                  } catch (e) {}
+              }
+              
+              const filename = `historical_data_${Date.now()}.csv`;
+              const finalPath = path.join(dataDir, filename);
+              
+              try {
+                  await fsPromises.writeFile(finalPath, content);
+              } catch (e) {
+                   const tmpPath = path.join("/tmp", filename);
+                   await fsPromises.writeFile(tmpPath, content);
+                   // Update finalPath for the link
+                   return { 
+                       content: [{ type: "text", text: `Data saved to ${tmpPath}.\n[Download CSV](/data/${filename})` }] 
+                   };
+              }
+              
+              const servePath = `/data/${filename}`;
+              const domainServer = process.env.DOMAIN_SERVER || '';
+              const fullServePath = domainServer ? `${domainServer}${servePath}` : servePath;
+              
+              return { 
+                  content: [{ type: "text", text: `Data saved to ${finalPath}.\n[Download CSV](${fullServePath})` }] 
+              };
+          }
+
+          return {
+              content: [{ type: "text", text: JSON.stringify(result.rows, null, 2) }],
+          };
+      } catch (err) {
+          return {
+              content: [{ type: "text", text: `Error fetching data: ${err.message}` }],
+              isError: true,
+          };
+      } finally {
+          client.release();
+      }
+  }
+
+  throw new Error(`Tool not found: ${name}`);
+});
+
+// --- Main ---
+
+async function main() {
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+  console.error("Live Data Postgres MCP Server running on stdio");
+  startTokenMaintenance();
+}
+
+main().catch((error) => {
+  console.error("Fatal error in main():", error);
+  process.exit(1);
+});

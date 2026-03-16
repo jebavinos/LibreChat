@@ -14,6 +14,7 @@ services:
       - RAG_API_URL=http://rag_api:${RAG_PORT:-8000}
       - DOMAIN_CLIENT=https://jvteststock.com
       - DOMAIN_SERVER=https://jvteststock.com
+      - TZ=${TZ}
     env_file:
       - .env
     volumes:
@@ -30,6 +31,8 @@ services:
     container_name: chat-mongodb
     image: mongo
     restart: always
+    environment:
+      - TZ=${TZ}
     volumes:
       - ./data-node:/data/db
     command: mongod --noauth
@@ -42,6 +45,7 @@ services:
       - MEILI_HOST=http://meilisearch:7700
       - MEILI_NO_ANALYTICS=true
       - MEILI_MASTER_KEY=${MEILI_MASTER_KEY}
+      - TZ=${TZ}
     volumes:
       - ./meili_data_v1.12:/meili_data
 
@@ -52,6 +56,7 @@ services:
       POSTGRES_DB: mydatabase
       POSTGRES_USER: myuser
       POSTGRES_PASSWORD: mypassword
+      TZ: ${TZ}
     restart: always
     volumes:
       - pgdata2:/var/lib/postgresql/data
@@ -62,6 +67,7 @@ services:
     environment:
       - DB_HOST=vectordb
       - RAG_PORT=${RAG_PORT:-8000}
+      - TZ=${TZ}
     restart: always
     depends_on:
       - vectordb
@@ -75,6 +81,8 @@ services:
       - 80:80
       - 443:443
     restart: always
+    environment:
+      - TZ=${TZ}
     volumes:
       - ./client/nginx.conf:/etc/nginx/conf.d/default.conf
       - ./certs:/etc/nginx/certs

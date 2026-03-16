@@ -20,6 +20,7 @@ services:
       - MEILI_HOST=http://meilisearch:7700
       - RAG_PORT=${RAG_PORT:-8000}
       - RAG_API_URL=http://rag_api:${RAG_PORT:-8000}
+      - TZ=${TZ}
     volumes:
       - type: bind
         source: ./.env
@@ -32,6 +33,8 @@ services:
     image: mongo
     restart: always
     user: "${UID}:${GID}"
+    environment:
+      - TZ=${TZ}
     volumes:
       - ./data-node:/data/db
     command: mongod --noauth
@@ -44,6 +47,7 @@ services:
       - MEILI_HOST=http://meilisearch:7700
       - MEILI_NO_ANALYTICS=true
       - MEILI_MASTER_KEY=${MEILI_MASTER_KEY}
+      - TZ=${TZ}
     volumes:
       - ./meili_data_v1.12:/meili_data
   vectordb:
@@ -53,6 +57,7 @@ services:
       POSTGRES_DB: mydatabase
       POSTGRES_USER: myuser
       POSTGRES_PASSWORD: mypassword
+      TZ: ${TZ}
     restart: always
     volumes:
       - pgdata2:/var/lib/postgresql/data
@@ -62,6 +67,7 @@ services:
     environment:
       - DB_HOST=vectordb
       - RAG_PORT=${RAG_PORT:-8000}
+      - TZ=${TZ}
     restart: always
     depends_on:
       - vectordb

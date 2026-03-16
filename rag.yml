@@ -7,6 +7,7 @@ services:
       POSTGRES_DB: mydatabase
       POSTGRES_USER: myuser
       POSTGRES_PASSWORD: mypassword
+      TZ: ${TZ}
     volumes:
       - pgdata2:/var/lib/postgresql/data
     ports:
@@ -20,6 +21,7 @@ services:
       - POSTGRES_DB=mydatabase
       - POSTGRES_USER=myuser
       - POSTGRES_PASSWORD=mypassword
+      - TZ=${TZ}
     ports:
       - "${RAG_PORT}:${RAG_PORT}"
     depends_on:

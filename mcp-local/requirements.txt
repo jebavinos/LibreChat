@@ -49,3 +49,4 @@ statsmodels
 pandas
 numpy
 yfinance
+PyPDF2

@@ -13,6 +13,7 @@ import type { TConversation } from 'librechat-data-provider';
 import { useLocalize, useExportConversation } from '~/hooks';
 
 const TYPE_OPTIONS = [
+  { value: 'pdf', label: 'pdf (.pdf)' },
   { value: 'screenshot', label: 'screenshot (.png)' },
   { value: 'text', label: 'text (.txt)' },
   { value: 'markdown', label: 'markdown (.md)' },
@@ -36,7 +37,7 @@ export default function ExportModal({
   const localize = useLocalize();
 
   const [filename, setFileName] = useState('');
-  const [type, setType] = useState<string>('screenshot');
+  const [type, setType] = useState<string>('pdf');
 
   const [includeOptions, setIncludeOptions] = useState<boolean | 'indeterminate'>(true);
   const [exportBranches, setExportBranches] = useState<boolean | 'indeterminate'>(false);
@@ -50,7 +51,7 @@ export default function ExportModal({
 
   useEffect(() => {
     setFileName(filenamify(String(conversation?.title ?? 'file')));
-    setType('screenshot');
+    setType('pdf');
     setIncludeOptions(true);
     setExportBranches(false);
     setRecursive(true);
@@ -58,7 +59,7 @@ export default function ExportModal({
 
   const handleTypeChange = useCallback((newType: string) => {
     const branches = newType === 'json' || newType === 'csv' || newType === 'webpage';
-    const options = newType !== 'csv' && newType !== 'screenshot';
+    const options = newType !== 'csv' && newType !== 'screenshot' && newType !== 'pdf';
     setExportBranches(branches);
     setIncludeOptions(options);
     setType(newType);
@@ -68,7 +69,7 @@ export default function ExportModal({
     () => type === 'json' || type === 'csv' || type === 'webpage',
     [type],
   );
-  const exportOptionsSupport = useMemo(() => type !== 'csv' && type !== 'screenshot', [type]);
+  const exportOptionsSupport = useMemo(() => type !== 'csv' && type !== 'screenshot' && type !== 'pdf', [type]);
 
   const { exportConversation } = useExportConversation({
     conversation,
@@ -188,7 +189,19 @@ export default function ExportModal({
         }
         buttons={
           <>
-            <Button onClick={exportConversation} variant="submit">
+            <Button
+              onClick={() => {
+                if (type === 'pdf') {
+                  onOpenChange(false);
+                  setTimeout(() => {
+                    exportConversation();
+                  }, 500);
+                } else {
+                  exportConversation();
+                }
+              }}
+              variant="submit"
+            >
               {localize('com_endpoint_export')}
             </Button>
           </>

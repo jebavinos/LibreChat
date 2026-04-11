@@ -35,10 +35,10 @@ function MessagesViewContent({
 
   return (
     <>
-      <div className="relative flex-1 overflow-hidden overflow-y-auto">
-        <div className="relative h-full">
+      <div className="relative flex-1 overflow-hidden overflow-y-auto print:block print:h-auto print:overflow-visible">
+        <div className="relative h-full print:block print:h-auto print:overflow-visible">
           <div
-            className="scrollbar-gutter-stable"
+            className="scrollbar-gutter-stable print:block print:h-auto print:overflow-visible"
             onScroll={debouncedHandleScroll}
             ref={scrollableRef}
             style={{

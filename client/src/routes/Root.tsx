@@ -70,12 +70,16 @@ export default function Root() {
         <AssistantsMapContext.Provider value={assistantsMap}>
           <AgentsMapContext.Provider value={agentsMap}>
             <PromptGroupsProvider>
-              <Banner onHeightChange={setBannerHeight} />
-              <div className="flex" style={{ height: `calc(100dvh - ${bannerHeight}px)` }}>
-                <div className="relative z-0 flex h-full w-full overflow-hidden">
+              <div className="print:hidden">
+                <Banner onHeightChange={setBannerHeight} />
+              </div>
+              <div className="flex print:block print:h-auto" style={{ height: `calc(100dvh - ${bannerHeight}px)` }}>
+                <div className="relative z-0 flex h-full w-full overflow-hidden print:block print:h-auto print:overflow-visible">
                   <Nav navVisible={navVisible} setNavVisible={setNavVisible} />
-                  <div className="relative flex h-full max-w-full flex-1 flex-col overflow-hidden">
-                    <MobileNav navVisible={navVisible} setNavVisible={setNavVisible} />
+                  <div className="relative flex h-full max-w-full flex-1 flex-col overflow-hidden print:block print:h-auto print:overflow-visible">
+                    <div className="print:hidden">
+                      <MobileNav navVisible={navVisible} setNavVisible={setNavVisible} />
+                    </div>
                     <Outlet context={{ navVisible, setNavVisible } satisfies ContextType} />
                   </div>
                 </div>

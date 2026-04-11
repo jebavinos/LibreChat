@@ -4,6 +4,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import puppeteerCore from 'puppeteer-core';
 import fs from 'fs';
+import path from 'path';
 import TurndownService from 'turndown';
 import { z } from 'zod';
 import dotenv from 'dotenv';
@@ -124,6 +125,49 @@ async function scrapeUrl(url: string, selector?: string): Promise<string> {
   }
 }
 
+async function downloadDocument(url: string, destPath?: string): Promise<string> {
+  try {
+    console.error(`Starting download for ${url}`);
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch document: ${response.status} ${response.statusText}`);
+    }
+
+    let fileName = '';
+    const contentDisposition = response.headers.get('content-disposition');
+    if (contentDisposition && contentDisposition.includes('filename=')) {
+        const matches = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(contentDisposition);
+        if (matches != null && matches[1]) {
+            fileName = matches[1].replace(/['"]/g, '');
+        }
+    }
+    
+    if (!fileName) {
+      fileName = url.split('/').pop()?.split('?')[0] || `document-${Date.now()}`;
+    }
+
+    const finalPath = destPath || path.resolve(process.cwd(), fileName);
+    const dir = path.dirname(finalPath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    fs.writeFileSync(finalPath, buffer);
+
+    return `Document downloaded successfully to: ${finalPath}`;
+  } catch (error: any) {
+    console.error(`Download error for ${url}:`, error);
+    return `Error downloading ${url}: ${error.message}`;
+  }
+}
+
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
@@ -145,6 +189,24 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           required: ["url"],
         },
       },
+      {
+        name: "download_document",
+        description: "Download a document (PDF, DOCX, CSV, etc.) from a URL to the local filesystem.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            url: {
+              type: "string",
+              description: "The URL of the document to download",
+            },
+            destPath: {
+              type: "string",
+              description: "Optional: Absolute path where the file should be saved. If omitted, downloads to the current working directory.",
+            }
+          },
+          required: ["url"],
+        },
+      },
     ],
   };
 });
@@ -158,6 +220,25 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
 
     const result = await scrapeUrl(args.url, args.selector);
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: result,
+        },
+      ],
+    };
+  }
+
+  if (request.params.name === "download_document") {
+    const args = request.params.arguments as { url: string; destPath?: string };
+    
+    if (!args.url) {
+        throw new Error("URL is required");
+    }
+
+    const result = await downloadDocument(args.url, args.destPath);
 
     return {
       content: [

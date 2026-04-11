@@ -384,6 +384,8 @@ export default function useExportConversation({
       exportCSV();
     } else if (type == 'screenshot') {
       exportScreenshot();
+    } else if (type == 'pdf') {
+      window.print();
     }
   };
 

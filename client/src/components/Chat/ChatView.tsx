@@ -79,12 +79,16 @@ function ChatView({ index = 0 }: { index?: number }) {
       <ChatContext.Provider value={chatHelpers}>
         <AddedChatContext.Provider value={addedChatHelpers}>
           <Presentation>
-            <div className="flex h-full w-full flex-col">
-              {!isLoading && <Header />}
+            <div className="flex h-full w-full flex-col print:bg-white print:text-black">
+              {!isLoading && (
+                <div className="print:hidden">
+                  <Header />
+                </div>
+              )}
               <>
                 <div
                   className={cn(
-                    'flex flex-col',
+                    'flex flex-col print:block print:h-auto print:overflow-visible',
                     isLandingPage
                       ? 'flex-1 items-center justify-end sm:justify-center'
                       : 'h-full overflow-y-auto',
@@ -93,7 +97,7 @@ function ChatView({ index = 0 }: { index?: number }) {
                   {content}
                   <div
                     className={cn(
-                      'w-full',
+                      'w-full print:hidden',
                       isLandingPage && 'max-w-3xl transition-all duration-200 xl:max-w-4xl',
                     )}
                   >
@@ -101,7 +105,11 @@ function ChatView({ index = 0 }: { index?: number }) {
                     {isLandingPage ? <ConversationStarters /> : <Footer />}
                   </div>
                 </div>
-                {isLandingPage && <Footer />}
+                {isLandingPage && (
+                  <div className="print:hidden">
+                    <Footer />
+                  </div>
+                )}
               </>
             </div>
           </Presentation>

@@ -600,6 +600,7 @@ export const tMessageSchema = z.object({
   generation: z.string().nullable().optional(),
   isCreatedByUser: z.boolean(),
   error: z.boolean().optional(),
+  tokenCount: z.number().optional(),
   clientTimestamp: z.string().optional(),
   createdAt: z
     .string()

@@ -50,3 +50,5 @@ pandas
 numpy
 yfinance
 PyPDF2
+pdfminer.six
+pdfplumber

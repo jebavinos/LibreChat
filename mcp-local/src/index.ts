@@ -396,6 +396,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           properties: {
              instrument_token: { type: "string", description: "Instrument token to filter by (optional if trading_symbol provided)" },
              trading_symbol: { type: "string", description: "Trading symbol (e.g., 'TCS.NS', 'INFY') to look up instrument token for." },
+             exchange: { type: "string", description: "Exchange to filter by (e.g., NSE, BSE, NFO, BFO, MCX, CDS, GLOBAL)." },
              start_date: { type: "string", description: "Start date (ISO format or yyyy-mm-dd HH:MM:SS)" },
              end_date: { type: "string", description: "End date (ISO format or yyyy-mm-dd HH:MM:SS)" },
              interval: { type: "string", description: "Candle interval (minute, day, 3minute, 5minute, 10minute, 15minute, 30minute, 60minute). Default: day" }
@@ -602,7 +603,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     // ---------------- GET HISTORICAL DATA ----------------
     if (name === "get_historical_data") {
-        let { instrument_token, trading_symbol, start_date, end_date, interval, format } = args;
+        let { instrument_token, trading_symbol, exchange, start_date, end_date, interval, format } = args;
         
         // Default interval
         if (!interval) interval = "day";
@@ -613,14 +614,17 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             if (trading_symbol && !instrument_token) {
                  // Try to strip e.g. .NS suffix if common
                  let symbol = trading_symbol.toUpperCase();
-                 let exchangeFilter = null;
+                 let exchangeFilter = exchange ? exchange.toUpperCase() : null;
                  
                  // Basic heuristic: check for suffix
                  const suffixDot = symbol.lastIndexOf(".");
                  if (suffixDot !== -1) {
-                     const suffix = symbol.substring(suffixDot + 1);
-                     if (suffix === 'NS') exchangeFilter = 'NSE';
-                     if (suffix === 'BO') exchangeFilter = 'BSE';
+                     const suffix = symbol.substring(suffixDot + 1).toUpperCase();
+                     if (suffix === 'NS') exchangeFilter = exchangeFilter || 'NSE';
+                     else if (suffix === 'BO') exchangeFilter = exchangeFilter || 'BSE';
+                     else if (['BFO', 'BSE', 'CDS', 'GLOBAL', 'MCX', 'NCO', 'NFO', 'NSE', 'NSEIX'].includes(suffix)) {
+                         exchangeFilter = exchangeFilter || suffix;
+                     }
                      symbol = symbol.substring(0, suffixDot);
                  }
 
@@ -653,6 +657,23 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                          // Try with original full symbol (maybe it really has .NS inside?)
                          const simpleQuery = `SELECT instrument_token FROM instruments WHERE tradingsymbol = $1 LIMIT 1`;
                          res = await client.query(simpleQuery, [trading_symbol.toUpperCase()]);
+                     }
+                 }
+                 
+                 if (res.rows.length === 0) {
+                     // Map common indices
+                     const indexMap = {
+                         "NIFTY": "NIFTY 50",
+                         "BANKNIFTY": "NIFTY BANK",
+                         "FINNIFTY": "NIFTY FIN SERVICE",
+                         "MIDCPNIFTY": "NIFTY MID SELECT",
+                         "SENSEX": "BSE SENSEX",
+                         "BANKEX": "BSE BANKEX"
+                     };
+                     
+                     if (indexMap[symbol]) {
+                         const mappedQuery = `SELECT instrument_token FROM instruments WHERE tradingsymbol = $1 LIMIT 1`;
+                         res = await client.query(mappedQuery, [indexMap[symbol]]);
                      }
                  }
                  

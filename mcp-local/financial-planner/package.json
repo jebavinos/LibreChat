@@ -1,0 +1,23 @@
+{
+  "name": "financial-planner-mcp",
+  "version": "1.0.0",
+  "description": "MCP server for financial planning using Anthropic",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.32.1",
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "dotenv": "^16.4.5",
+    "openai": "^6.34.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.7.1",
+    "typescript": "^5.3.3"
+  }
+}

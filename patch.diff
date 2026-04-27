@@ -1,0 +1,788 @@
+commit ba47e8857c3d609beec73a6accca242e0a596fe1
+Author: jebavinos <jebavinos@gmail.com>
+Date:   Sat Apr 11 14:29:44 2026 +0530
+
+    cmt changes
+
+diff --git a/client/src/components/Chat/ChatView.tsx b/client/src/components/Chat/ChatView.tsx
+index 9c760e440..7025593d5 100644
+--- a/client/src/components/Chat/ChatView.tsx
++++ b/client/src/components/Chat/ChatView.tsx
+@@ -79,12 +79,16 @@ function ChatView({ index = 0 }: { index?: number }) {
+       <ChatContext.Provider value={chatHelpers}>
+         <AddedChatContext.Provider value={addedChatHelpers}>
+           <Presentation>
+-            <div className="flex h-full w-full flex-col">
+-              {!isLoading && <Header />}
++            <div className="flex h-full w-full flex-col print:bg-white print:text-black">
++              {!isLoading && (
++                <div className="print:hidden">
++                  <Header />
++                </div>
++              )}
+               <>
+                 <div
+                   className={cn(
+-                    'flex flex-col',
++                    'flex flex-col print:block print:h-auto print:overflow-visible',
+                     isLandingPage
+                       ? 'flex-1 items-center justify-end sm:justify-center'
+                       : 'h-full overflow-y-auto',
+@@ -93,7 +97,7 @@ function ChatView({ index = 0 }: { index?: number }) {
+                   {content}
+                   <div
+                     className={cn(
+-                      'w-full',
++                      'w-full print:hidden',
+                       isLandingPage && 'max-w-3xl transition-all duration-200 xl:max-w-4xl',
+                     )}
+                   >
+@@ -101,7 +105,11 @@ function ChatView({ index = 0 }: { index?: number }) {
+                     {isLandingPage ? <ConversationStarters /> : <Footer />}
+                   </div>
+                 </div>
+-                {isLandingPage && <Footer />}
++                {isLandingPage && (
++                  <div className="print:hidden">
++                    <Footer />
++                  </div>
++                )}
+               </>
+             </div>
+           </Presentation>
+diff --git a/client/src/components/Chat/Messages/MessagesView.tsx b/client/src/components/Chat/Messages/MessagesView.tsx
+index bea6554ff..801bc313f 100644
+--- a/client/src/components/Chat/Messages/MessagesView.tsx
++++ b/client/src/components/Chat/Messages/MessagesView.tsx
+@@ -35,10 +35,10 @@ function MessagesViewContent({
+ 
+   return (
+     <>
+-      <div className="relative flex-1 overflow-hidden overflow-y-auto">
+-        <div className="relative h-full">
++      <div className="relative flex-1 overflow-hidden overflow-y-auto print:block print:h-auto print:overflow-visible">
++        <div className="relative h-full print:block print:h-auto print:overflow-visible">
+           <div
+-            className="scrollbar-gutter-stable"
++            className="scrollbar-gutter-stable print:block print:h-auto print:overflow-visible"
+             onScroll={debouncedHandleScroll}
+             ref={scrollableRef}
+             style={{
+diff --git a/client/src/components/Nav/ExportConversation/ExportModal.tsx b/client/src/components/Nav/ExportConversation/ExportModal.tsx
+index 2083ddec1..c803e2803 100644
+--- a/client/src/components/Nav/ExportConversation/ExportModal.tsx
++++ b/client/src/components/Nav/ExportConversation/ExportModal.tsx
+@@ -13,6 +13,7 @@ import type { TConversation } from 'librechat-data-provider';
+ import { useLocalize, useExportConversation } from '~/hooks';
+ 
+ const TYPE_OPTIONS = [
++  { value: 'pdf', label: 'pdf (.pdf)' },
+   { value: 'screenshot', label: 'screenshot (.png)' },
+   { value: 'text', label: 'text (.txt)' },
+   { value: 'markdown', label: 'markdown (.md)' },
+@@ -36,7 +37,7 @@ export default function ExportModal({
+   const localize = useLocalize();
+ 
+   const [filename, setFileName] = useState('');
+-  const [type, setType] = useState<string>('screenshot');
++  const [type, setType] = useState<string>('pdf');
+ 
+   const [includeOptions, setIncludeOptions] = useState<boolean | 'indeterminate'>(true);
+   const [exportBranches, setExportBranches] = useState<boolean | 'indeterminate'>(false);
+@@ -50,7 +51,7 @@ export default function ExportModal({
+ 
+   useEffect(() => {
+     setFileName(filenamify(String(conversation?.title ?? 'file')));
+-    setType('screenshot');
++    setType('pdf');
+     setIncludeOptions(true);
+     setExportBranches(false);
+     setRecursive(true);
+@@ -58,7 +59,7 @@ export default function ExportModal({
+ 
+   const handleTypeChange = useCallback((newType: string) => {
+     const branches = newType === 'json' || newType === 'csv' || newType === 'webpage';
+-    const options = newType !== 'csv' && newType !== 'screenshot';
++    const options = newType !== 'csv' && newType !== 'screenshot' && newType !== 'pdf';
+     setExportBranches(branches);
+     setIncludeOptions(options);
+     setType(newType);
+@@ -68,7 +69,7 @@ export default function ExportModal({
+     () => type === 'json' || type === 'csv' || type === 'webpage',
+     [type],
+   );
+-  const exportOptionsSupport = useMemo(() => type !== 'csv' && type !== 'screenshot', [type]);
++  const exportOptionsSupport = useMemo(() => type !== 'csv' && type !== 'screenshot' && type !== 'pdf', [type]);
+ 
+   const { exportConversation } = useExportConversation({
+     conversation,
+@@ -188,7 +189,19 @@ export default function ExportModal({
+         }
+         buttons={
+           <>
+-            <Button onClick={exportConversation} variant="submit">
++            <Button
++              onClick={() => {
++                if (type === 'pdf') {
++                  onOpenChange(false);
++                  setTimeout(() => {
++                    exportConversation();
++                  }, 500);
++                } else {
++                  exportConversation();
++                }
++              }}
++              variant="submit"
++            >
+               {localize('com_endpoint_export')}
+             </Button>
+           </>
+diff --git a/client/src/components/Nav/Nav.tsx b/client/src/components/Nav/Nav.tsx
+index e44990414..1581e779f 100644
+--- a/client/src/components/Nav/Nav.tsx
++++ b/client/src/components/Nav/Nav.tsx
+@@ -196,7 +196,7 @@ const Nav = memo(
+             <motion.div
+               data-testid="nav"
+               className={cn(
+-                'nav active max-w-[320px] flex-shrink-0 overflow-x-hidden bg-surface-primary-alt',
++                'nav active max-w-[320px] flex-shrink-0 overflow-x-hidden bg-surface-primary-alt print:hidden',
+                 'md:max-w-[260px]',
+               )}
+               initial={{ width: 0 }}
+diff --git a/client/src/hooks/Conversations/useExportConversation.ts b/client/src/hooks/Conversations/useExportConversation.ts
+index 579b5f1cf..763e4a958 100644
+--- a/client/src/hooks/Conversations/useExportConversation.ts
++++ b/client/src/hooks/Conversations/useExportConversation.ts
+@@ -384,6 +384,8 @@ export default function useExportConversation({
+       exportCSV();
+     } else if (type == 'screenshot') {
+       exportScreenshot();
++    } else if (type == 'pdf') {
++      window.print();
+     }
+   };
+ 
+diff --git a/client/src/routes/Root.tsx b/client/src/routes/Root.tsx
+index 4c12d4644..1c76726d8 100644
+--- a/client/src/routes/Root.tsx
++++ b/client/src/routes/Root.tsx
+@@ -70,12 +70,16 @@ export default function Root() {
+         <AssistantsMapContext.Provider value={assistantsMap}>
+           <AgentsMapContext.Provider value={agentsMap}>
+             <PromptGroupsProvider>
+-              <Banner onHeightChange={setBannerHeight} />
+-              <div className="flex" style={{ height: `calc(100dvh - ${bannerHeight}px)` }}>
+-                <div className="relative z-0 flex h-full w-full overflow-hidden">
++              <div className="print:hidden">
++                <Banner onHeightChange={setBannerHeight} />
++              </div>
++              <div className="flex print:block print:h-auto" style={{ height: `calc(100dvh - ${bannerHeight}px)` }}>
++                <div className="relative z-0 flex h-full w-full overflow-hidden print:block print:h-auto print:overflow-visible">
+                   <Nav navVisible={navVisible} setNavVisible={setNavVisible} />
+-                  <div className="relative flex h-full max-w-full flex-1 flex-col overflow-hidden">
+-                    <MobileNav navVisible={navVisible} setNavVisible={setNavVisible} />
++                  <div className="relative flex h-full max-w-full flex-1 flex-col overflow-hidden print:block print:h-auto print:overflow-visible">
++                    <div className="print:hidden">
++                      <MobileNav navVisible={navVisible} setNavVisible={setNavVisible} />
++                    </div>
+                     <Outlet context={{ navVisible, setNavVisible } satisfies ContextType} />
+                   </div>
+                 </div>
+diff --git a/mcp-local/python-interpreter/requirements.txt b/mcp-local/python-interpreter/requirements.txt
+index 0e628386b..5be601897 100644
+--- a/mcp-local/python-interpreter/requirements.txt
++++ b/mcp-local/python-interpreter/requirements.txt
+@@ -2,3 +2,4 @@ pandas>=2.2.0
+ numpy>=1.26.0
+ requests>=2.31.0
+ openpyxl>=3.1.2
++PyPDF2>=3.0.0
+diff --git a/mcp-local/requirements.txt b/mcp-local/requirements.txt
+index b4c90bba5..e5006cf68 100644
+--- a/mcp-local/requirements.txt
++++ b/mcp-local/requirements.txt
+@@ -49,3 +49,4 @@ statsmodels
+ pandas
+ numpy
+ yfinance
++PyPDF2
+diff --git a/mcp-local/src/__pycache__/test_agent_accuracy.cpython-310-pytest-9.0.2.pyc b/mcp-local/src/__pycache__/test_agent_accuracy.cpython-310-pytest-9.0.2.pyc
+new file mode 100644
+index 000000000..6f25383ab
+Binary files /dev/null and b/mcp-local/src/__pycache__/test_agent_accuracy.cpython-310-pytest-9.0.2.pyc differ
+diff --git a/mcp-local/src/__pycache__/test_agent_accuracy.cpython-310.pyc b/mcp-local/src/__pycache__/test_agent_accuracy.cpython-310.pyc
+new file mode 100644
+index 000000000..3d84d851c
+Binary files /dev/null and b/mcp-local/src/__pycache__/test_agent_accuracy.cpython-310.pyc differ
+diff --git a/mcp-local/src/test_agent_accuracy.py b/mcp-local/src/test_agent_accuracy.py
+new file mode 100644
+index 000000000..b5c5a8297
+--- /dev/null
++++ b/mcp-local/src/test_agent_accuracy.py
+@@ -0,0 +1,93 @@
++import os
++import requests
++import pytest
++from deepeval import assert_test
++from deepeval.test_case import LLMTestCase, LLMTestCaseParams
++from deepeval.metrics import AnswerRelevancyMetric, GEval
++
++# ---------------------------------------------------------
++# 1. Setup your API call to LibreChat here
++# ---------------------------------------------------------
++
++LIBRECHAT_API_KEY = os.getenv("LIBRECHAT_API_KEY", "your-api-key-here")
++LIBRECHAT_URL = os.getenv("LIBRECHAT_URL", "http://localhost:3080/api/v1/chat/completions")
++
++def call_stock_market_analyser(prompt: str) -> str:
++    """
++    Calls the LibreChat API, targeting the 'Stock_market_analyser' agent.
++    Replace with your actual API integration.
++    """
++    headers = {
++        "Authorization": f"Bearer {LIBRECHAT_API_KEY}",
++        "Content-Type": "application/json"
++    }
++
++    # You may need to adjust the payload based on LibreChat's Assistants/Agents API
++    payload = {
++        "model": "Stock_market_analyser", # Might be the agent/assistant ID or model name
++        "messages": [{"role": "user", "content": prompt}],
++        "stream": False
++    }
++
++    try:
++        # Uncomment below when you're ready to test with the real API:
++        # response = requests.post(LIBRECHAT_URL, json=payload, headers=headers)
++        # response.raise_for_status()
++        # return response.json()["choices"][0]["message"]["content"]
++        
++        # MOCK RETURN FOR NOW:
++        return (
++            "Based on technical and fundamental analysis, here are 3 hidden gem stocks.\n"
++            "This is a mocked response from Stock_market_analyser for prompt: " + prompt
++        )
++    except Exception as e:
++        print(f"Error calling LibreChat API: {e}")
++        return "Error occurred."
++
++
++# ---------------------------------------------------------
++# 2. Define DeepEval Metrics
++# ---------------------------------------------------------
++
++# Answer Relevancy measures how relevant the output is to the input query
++answer_relevancy_metric = AnswerRelevancyMetric(threshold=0.7, model="gpt-4o-mini")
++
++# GEval is a customizable metric. We'll define one evaluating the stock picks strategy.
++stock_quality_geval = GEval(
++    name="Stock Recommendations Quality",
++    criteria="Determine whether the actual output provides actionable stock recommendations fitting the input criteria, accompanied by adequate justification.",
++    evaluation_params=[LLMTestCaseParams.INPUT, LLMTestCaseParams.ACTUAL_OUTPUT],
++    threshold=0.7,
++    model="gpt-4o-mini"
++)
++
++
++# ---------------------------------------------------------
++# 3. Write pytest test cases
++# ---------------------------------------------------------
++
++@pytest.mark.parametrize("prompt, expected_output", [
++    (
++        "identify stocks which can give 10 percent returns in 10 sessions",
++        "A list of stocks with a high probability of short-term upward momentum, backed by technical indicators or catalysts."
++    ),
++    (
++        "Can you identify some small cap hidden gems?",
++        "A list of fundamentally strong, under-the-radar small cap stocks with long term growth potential."
++    )
++])
++def test_stock_marker_analyser(prompt, expected_output):
++    # Step 1: Call the Agent
++    actual_output = call_stock_market_analyser(prompt)
++
++    # Step 2: Form a DeepEval TestCase
++    test_case = LLMTestCase(
++        input=prompt,
++        actual_output=actual_output,
++        expected_output=expected_output,
++        retrieval_context=[] # Optional: Add retrieved knowledge if the agent uses RAG
++    )
++
++    # Step 3: Assert using the configured metrics
++    assert_test(test_case, [answer_relevancy_metric, stock_quality_geval])
++
+diff --git a/mcp-local/web-scraper/src/index.ts b/mcp-local/web-scraper/src/index.ts
+index 18bddbfbd..b8ba6e87f 100644
+--- a/mcp-local/web-scraper/src/index.ts
++++ b/mcp-local/web-scraper/src/index.ts
+@@ -4,6 +4,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
+ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
+ import puppeteerCore from 'puppeteer-core';
+ import fs from 'fs';
++import path from 'path';
+ import TurndownService from 'turndown';
+ import { z } from 'zod';
+ import dotenv from 'dotenv';
+@@ -124,6 +125,49 @@ async function scrapeUrl(url: string, selector?: string): Promise<string> {
+   }
+ }
+ 
++async function downloadDocument(url: string, destPath?: string): Promise<string> {
++  try {
++    console.error(`Starting download for ${url}`);
++    const response = await fetch(url, {
++      headers: {
++        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
++      }
++    });
++    
++    if (!response.ok) {
++      throw new Error(`Failed to fetch document: ${response.status} ${response.statusText}`);
++    }
++
++    let fileName = '';
++    const contentDisposition = response.headers.get('content-disposition');
++    if (contentDisposition && contentDisposition.includes('filename=')) {
++        const matches = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(contentDisposition);
++        if (matches != null && matches[1]) {
++            fileName = matches[1].replace(/['"]/g, '');
++        }
++    }
++    
++    if (!fileName) {
++      fileName = url.split('/').pop()?.split('?')[0] || `document-${Date.now()}`;
++    }
++
++    const finalPath = destPath || path.resolve(process.cwd(), fileName);
++    const dir = path.dirname(finalPath);
++    if (!fs.existsSync(dir)) {
++      fs.mkdirSync(dir, { recursive: true });
++    }
++
++    const arrayBuffer = await response.arrayBuffer();
++    const buffer = Buffer.from(arrayBuffer);
++    fs.writeFileSync(finalPath, buffer);
++
++    return `Document downloaded successfully to: ${finalPath}`;
++  } catch (error: any) {
++    console.error(`Download error for ${url}:`, error);
++    return `Error downloading ${url}: ${error.message}`;
++  }
++}
++
+ server.setRequestHandler(ListToolsRequestSchema, async () => {
+   return {
+     tools: [
+@@ -145,6 +189,24 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
+           required: ["url"],
+         },
+       },
++      {
++        name: "download_document",
++        description: "Download a document (PDF, DOCX, CSV, etc.) from a URL to the local filesystem.",
++        inputSchema: {
++          type: "object",
++          properties: {
++            url: {
++              type: "string",
++              description: "The URL of the document to download",
++            },
++            destPath: {
++              type: "string",
++              description: "Optional: Absolute path where the file should be saved. If omitted, downloads to the current working directory.",
++            }
++          },
++          required: ["url"],
++        },
++      },
+     ],
+   };
+ });
+@@ -169,6 +231,25 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
+     };
+   }
+ 
++  if (request.params.name === "download_document") {
++    const args = request.params.arguments as { url: string; destPath?: string };
++    
++    if (!args.url) {
++        throw new Error("URL is required");
++    }
++
++    const result = await downloadDocument(args.url, args.destPath);
++
++    return {
++      content: [
++        {
++          type: "text",
++          text: result,
++        },
++      ],
++    };
++  }
++
+   throw new Error(`Tool ${request.params.name} not found`);
+ });
+ 
+diff --git a/package-lock.json b/package-lock.json
+index ddc2d8834..cfd18f98b 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -13,6 +13,10 @@
+         "client",
+         "packages/*"
+       ],
++      "dependencies": {
++        "html2canvas": "^1.4.1",
++        "jspdf": "^4.2.1"
++      },
+       "devDependencies": {
+         "@axe-core/playwright": "^4.10.1",
+         "@eslint/compat": "^1.2.6",
+@@ -12056,12 +12060,9 @@
+       }
+     },
+     "node_modules/@babel/runtime": {
+-      "version": "7.26.10",
+-      "resolved": "https://registry.npmjs.org/@babel/runtime/-/runtime-7.26.10.tgz",
+-      "integrity": "sha512-2WJMeRQPHKSPemqk/awGrAiuFfzBmOIPXKizAsVhWH9YJqLZ0H+HS4c8loHGgW6utJ3E/ejXQUsiGaQy2NZ9Fw==",
+-      "dependencies": {
+-        "regenerator-runtime": "^0.14.0"
+-      },
++      "version": "7.29.2",
++      "resolved": "https://registry.npmjs.org/@babel/runtime/-/runtime-7.29.2.tgz",
++      "integrity": "sha512-JiDShH45zKHWyGe4ZNVRrCjBz8Nh9TMmZG1kh4QTK8hCBTWBi8Da+i7s1fJw7/lYpM4ccepSNfqzZ/QvABBi5g==",
+       "engines": {
+         "node": ">=6.9.0"
+       }
+@@ -24526,6 +24527,11 @@
+         "form-data": "^4.0.4"
+       }
+     },
++    "node_modules/@types/pako": {
++      "version": "2.0.4",
++      "resolved": "https://registry.npmjs.org/@types/pako/-/pako-2.0.4.tgz",
++      "integrity": "sha512-VWDCbrLeVXJM9fihYodcLiIv0ku+AlOa/TQ1SvYOaBuyrSKgEcro95LJyIsJ4vSo6BXIxOKxiJAat04CmST9Fw=="
++    },
+     "node_modules/@types/passport": {
+       "version": "1.0.17",
+       "resolved": "https://registry.npmjs.org/@types/passport/-/passport-1.0.17.tgz",
+@@ -24555,6 +24561,12 @@
+       "resolved": "https://registry.npmjs.org/@types/qs/-/qs-6.9.17.tgz",
+       "integrity": "sha512-rX4/bPcfmvxHDv0XjfJELTTr+iB+tn032nPILqHm5wbthUUUuVtNGGqzhya9XUxjTP8Fpr0qYgSZZKxGY++svQ=="
+     },
++    "node_modules/@types/raf": {
++      "version": "3.4.3",
++      "resolved": "https://registry.npmjs.org/@types/raf/-/raf-3.4.3.tgz",
++      "integrity": "sha512-c4YAvMedbPZ5tEyxzQdMoOhhJ4RD3rngZIdwC2/qDN3d7JpEhB6fiBRKVY1lg5B7Wk+uPBjn5f39j1/2MY1oOw==",
++      "optional": true
++    },
+     "node_modules/@types/range-parser": {
+       "version": "1.2.7",
+       "resolved": "https://registry.npmjs.org/@types/range-parser/-/range-parser-1.2.7.tgz",
+@@ -26150,6 +26162,14 @@
+       "license": "Apache-2.0",
+       "optional": true
+     },
++    "node_modules/base64-arraybuffer": {
++      "version": "1.0.2",
++      "resolved": "https://registry.npmjs.org/base64-arraybuffer/-/base64-arraybuffer-1.0.2.tgz",
++      "integrity": "sha512-I3yl4r9QB5ZRY3XuJVEPfc2XhZO6YweFPI+UovAzn+8/hb3oJ6lnysaFcjVpkCPfVWFUDvoZ8kmVDP7WyRtYtQ==",
++      "engines": {
++        "node": ">= 0.6.0"
++      }
++    },
+     "node_modules/base64-js": {
+       "version": "1.5.1",
+       "resolved": "https://registry.npmjs.org/base64-js/-/base64-js-1.5.1.tgz",
+@@ -26691,6 +26711,31 @@
+       ],
+       "license": "CC-BY-4.0"
+     },
++    "node_modules/canvg": {
++      "version": "3.0.11",
++      "resolved": "https://registry.npmjs.org/canvg/-/canvg-3.0.11.tgz",
++      "integrity": "sha512-5ON+q7jCTgMp9cjpu4Jo6XbvfYwSB2Ow3kzHKfIyJfaCAOHLbdKPQqGKgfED/R5B+3TFFfe8pegYA+b423SRyA==",
++      "optional": true,
++      "dependencies": {
++        "@babel/runtime": "^7.12.5",
++        "@types/raf": "^3.4.0",
++        "core-js": "^3.8.3",
++        "raf": "^3.4.1",
++        "regenerator-runtime": "^0.13.7",
++        "rgbcolor": "^1.0.1",
++        "stackblur-canvas": "^2.0.0",
++        "svg-pathdata": "^6.0.3"
++      },
++      "engines": {
++        "node": ">=10.0.0"
++      }
++    },
++    "node_modules/canvg/node_modules/regenerator-runtime": {
++      "version": "0.13.11",
++      "resolved": "https://registry.npmjs.org/regenerator-runtime/-/regenerator-runtime-0.13.11.tgz",
++      "integrity": "sha512-kY1AZVr2Ra+t+piVaJ4gxaFaReZVH40AKNo7UCX6W+dEwBo/2oZJzqfuN1qLq1oL45o56cPaTXELwrTh8Fpggg==",
++      "optional": true
++    },
+     "node_modules/ccount": {
+       "version": "2.0.1",
+       "resolved": "https://registry.npmjs.org/ccount/-/ccount-2.0.1.tgz",
+@@ -27385,6 +27430,17 @@
+         "toggle-selection": "^1.0.6"
+       }
+     },
++    "node_modules/core-js": {
++      "version": "3.49.0",
++      "resolved": "https://registry.npmjs.org/core-js/-/core-js-3.49.0.tgz",
++      "integrity": "sha512-es1U2+YTtzpwkxVLwAFdSpaIMyQaq0PBgm3YD1W3Qpsn1NAmO3KSgZfu+oGSWVu6NvLHoHCV/aYcsE5wiB7ALg==",
++      "hasInstallScript": true,
++      "optional": true,
++      "funding": {
++        "type": "opencollective",
++        "url": "https://opencollective.com/core-js"
++      }
++    },
+     "node_modules/core-js-compat": {
+       "version": "3.35.1",
+       "resolved": "https://registry.npmjs.org/core-js-compat/-/core-js-compat-3.35.1.tgz",
+@@ -27627,6 +27683,14 @@
+         "postcss": "^8.4"
+       }
+     },
++    "node_modules/css-line-break": {
++      "version": "2.1.0",
++      "resolved": "https://registry.npmjs.org/css-line-break/-/css-line-break-2.1.0.tgz",
++      "integrity": "sha512-FHcKFCZcAha3LwfVBhCQbW2nCNbkZXn7KVUJcsT5/P8YmfsVja0FMPJr0B903j/E69HUphKiV9iQArX8SDYA4w==",
++      "dependencies": {
++        "utrie": "^1.0.2"
++      }
++    },
+     "node_modules/css-prefers-color-scheme": {
+       "version": "8.0.2",
+       "resolved": "https://registry.npmjs.org/css-prefers-color-scheme/-/css-prefers-color-scheme-8.0.2.tgz",
+@@ -28380,10 +28444,9 @@
+       }
+     },
+     "node_modules/dompurify": {
+-      "version": "3.3.0",
+-      "resolved": "https://registry.npmjs.org/dompurify/-/dompurify-3.3.0.tgz",
+-      "integrity": "sha512-r+f6MYR1gGN1eJv0TVQbhA7if/U7P87cdPl3HN5rikqaBSBxLiCb/b9O+2eG0cxz0ghyU+mU1QkbsOwERMYlWQ==",
+-      "license": "(MPL-2.0 OR Apache-2.0)",
++      "version": "3.3.3",
++      "resolved": "https://registry.npmjs.org/dompurify/-/dompurify-3.3.3.tgz",
++      "integrity": "sha512-Oj6pzI2+RqBfFG+qOaOLbFXLQ90ARpcGG6UePL82bJLtdsa6CYJD7nmiU8MW9nQNOtCHV3lZ/Bzq1X0QYbBZCA==",
+       "optionalDependencies": {
+         "@types/trusted-types": "^2.0.7"
+       }
+@@ -29927,6 +29990,21 @@
+       "integrity": "sha512-DCXu6Ifhqcks7TZKY3Hxp3y6qphY5SJZmrWMDrKcERSOXWQdMhU9Ig/PYrzyw/ul9jOIyh0N4M0tbC5hodg8dw==",
+       "dev": true
+     },
++    "node_modules/fast-png": {
++      "version": "6.4.0",
++      "resolved": "https://registry.npmjs.org/fast-png/-/fast-png-6.4.0.tgz",
++      "integrity": "sha512-kAqZq1TlgBjZcLr5mcN6NP5Rv4V2f22z00c3g8vRrwkcqjerx7BEhPbOnWCPqaHUl2XWQBJQvOT/FQhdMT7X/Q==",
++      "dependencies": {
++        "@types/pako": "^2.0.3",
++        "iobuffer": "^5.3.2",
++        "pako": "^2.1.0"
++      }
++    },
++    "node_modules/fast-png/node_modules/pako": {
++      "version": "2.1.0",
++      "resolved": "https://registry.npmjs.org/pako/-/pako-2.1.0.tgz",
++      "integrity": "sha512-w+eufiZ1WuJYgPXbV/PO3NCMEc3xqylkKHzp8bxp1uW4qaSNQUkwmLLEc3kKsfz8lpV1F8Ht3U1Cm+9Srog2ug=="
++    },
+     "node_modules/fast-safe-stringify": {
+       "version": "2.1.1",
+       "resolved": "https://registry.npmjs.org/fast-safe-stringify/-/fast-safe-stringify-2.1.1.tgz",
+@@ -30039,6 +30117,11 @@
+         "node": "^12.20 || >= 14.13"
+       }
+     },
++    "node_modules/fflate": {
++      "version": "0.8.2",
++      "resolved": "https://registry.npmjs.org/fflate/-/fflate-0.8.2.tgz",
++      "integrity": "sha512-cPJU47OaAoCbg0pBvzsgpTPhmhqI5eJjh/JIu8tPj5q+T7iLvW/JAYUqmE7KOB4R1ZyEhzBaIQpQpardBF5z8A=="
++    },
+     "node_modules/file-entry-cache": {
+       "version": "8.0.0",
+       "resolved": "https://registry.npmjs.org/file-entry-cache/-/file-entry-cache-8.0.0.tgz",
+@@ -31446,6 +31529,18 @@
+         "url": "https://opencollective.com/unified"
+       }
+     },
++    "node_modules/html2canvas": {
++      "version": "1.4.1",
++      "resolved": "https://registry.npmjs.org/html2canvas/-/html2canvas-1.4.1.tgz",
++      "integrity": "sha512-fPU6BHNpsyIhr8yyMpTLLxAbkaK8ArIBcmZIRiBLiDhjeqvXolaEmDGmELFuX9I4xDcaKKcJl+TKZLqruBbmWA==",
++      "dependencies": {
++        "css-line-break": "^2.1.0",
++        "text-segmentation": "^1.0.3"
++      },
++      "engines": {
++        "node": ">=8.0.0"
++      }
++    },
+     "node_modules/htmlparser2": {
+       "version": "10.0.0",
+       "resolved": "https://registry.npmjs.org/htmlparser2/-/htmlparser2-10.0.0.tgz",
+@@ -31831,6 +31926,11 @@
+       "resolved": "https://registry.npmjs.org/intersection-observer/-/intersection-observer-0.10.0.tgz",
+       "integrity": "sha512-fn4bQ0Xq8FTej09YC/jqKZwtijpvARlRp6wxL5WTA6yPe2YWSJ5RJh7Nm79rK2qB0wr6iDQzH60XGq5V/7u8YQ=="
+     },
++    "node_modules/iobuffer": {
++      "version": "5.4.0",
++      "resolved": "https://registry.npmjs.org/iobuffer/-/iobuffer-5.4.0.tgz",
++      "integrity": "sha512-DRebOWuqDvxunfkNJAlc3IzWIPD5xVxwUNbHr7xKB8E6aLJxIPfNX3CoMJghcFjpv6RWQsrcJbghtEwSPoJqMA=="
++    },
+     "node_modules/ioredis": {
+       "version": "5.3.2",
+       "resolved": "https://registry.npmjs.org/ioredis/-/ioredis-5.3.2.tgz",
+@@ -34350,6 +34450,22 @@
+         "safe-buffer": "^5.0.1"
+       }
+     },
++    "node_modules/jspdf": {
++      "version": "4.2.1",
++      "resolved": "https://registry.npmjs.org/jspdf/-/jspdf-4.2.1.tgz",
++      "integrity": "sha512-YyAXyvnmjTbR4bHQRLzex3CuINCDlQnBqoSYyjJwTP2x9jDLuKDzy7aKUl0hgx3uhcl7xzg32agn5vlie6HIlQ==",
++      "dependencies": {
++        "@babel/runtime": "^7.28.6",
++        "fast-png": "^6.2.0",
++        "fflate": "^0.8.1"
++      },
++      "optionalDependencies": {
++        "canvg": "^3.0.11",
++        "core-js": "^3.6.0",
++        "dompurify": "^3.3.1",
++        "html2canvas": "^1.0.0-rc.5"
++      }
++    },
+     "node_modules/jsx-ast-utils": {
+       "version": "3.3.5",
+       "resolved": "https://registry.npmjs.org/jsx-ast-utils/-/jsx-ast-utils-3.3.5.tgz",
+@@ -38331,6 +38447,12 @@
+       "dev": true,
+       "license": "MIT"
+     },
++    "node_modules/performance-now": {
++      "version": "2.1.0",
++      "resolved": "https://registry.npmjs.org/performance-now/-/performance-now-2.1.0.tgz",
++      "integrity": "sha512-7EAHlyLHI56VEIdK57uwHdHKIaAGbnXPiw0yWbarQZOKaKpvUIgW0jWRVLiatnM+XXlSwsanIBH/hzGMJulMow==",
++      "optional": true
++    },
+     "node_modules/picocolors": {
+       "version": "1.1.1",
+       "resolved": "https://registry.npmjs.org/picocolors/-/picocolors-1.1.1.tgz",
+@@ -40169,6 +40291,15 @@
+         }
+       ]
+     },
++    "node_modules/raf": {
++      "version": "3.4.1",
++      "resolved": "https://registry.npmjs.org/raf/-/raf-3.4.1.tgz",
++      "integrity": "sha512-Sq4CW4QhwOHE8ucn6J34MqtZCeWFP2aQSmrlroYgqAV1PjStIhJXxYuTgUIfkEk7zTLjmIjLmU5q+fbD1NnOJA==",
++      "optional": true,
++      "dependencies": {
++        "performance-now": "^2.1.0"
++      }
++    },
+     "node_modules/random-bytes": {
+       "version": "1.0.0",
+       "resolved": "https://registry.npmjs.org/random-bytes/-/random-bytes-1.0.0.tgz",
+@@ -41792,6 +41923,15 @@
+       "dev": true,
+       "license": "MIT"
+     },
++    "node_modules/rgbcolor": {
++      "version": "1.0.1",
++      "resolved": "https://registry.npmjs.org/rgbcolor/-/rgbcolor-1.0.1.tgz",
++      "integrity": "sha512-9aZLIrhRaD97sgVhtJOW6ckOEh6/GnvQtdVNfdZ6s67+3/XwLS9lBcQYzEEhYVeUowN7pRzMLsyGhK2i/xvWbw==",
++      "optional": true,
++      "engines": {
++        "node": ">= 0.8.15"
++      }
++    },
+     "node_modules/ripemd160": {
+       "version": "2.0.2",
+       "resolved": "https://registry.npmjs.org/ripemd160/-/ripemd160-2.0.2.tgz",
+@@ -42635,6 +42775,15 @@
+         "node": ">=8"
+       }
+     },
++    "node_modules/stackblur-canvas": {
++      "version": "2.7.0",
++      "resolved": "https://registry.npmjs.org/stackblur-canvas/-/stackblur-canvas-2.7.0.tgz",
++      "integrity": "sha512-yf7OENo23AGJhBriGx0QivY5JP6Y1HbrrDI6WLt6C5auYZXlQrheoY8hD4ibekFKz1HOfE48Ww8kMWMnJD/zcQ==",
++      "optional": true,
++      "engines": {
++        "node": ">=0.1.14"
++      }
++    },
+     "node_modules/standard-as-callback": {
+       "version": "2.1.0",
+       "resolved": "https://registry.npmjs.org/standard-as-callback/-/standard-as-callback-2.1.0.tgz",
+@@ -43271,6 +43420,15 @@
+         "url": "https://github.com/sponsors/ljharb"
+       }
+     },
++    "node_modules/svg-pathdata": {
++      "version": "6.0.3",
++      "resolved": "https://registry.npmjs.org/svg-pathdata/-/svg-pathdata-6.0.3.tgz",
++      "integrity": "sha512-qsjeeq5YjBZ5eMdFuUa4ZosMLxgr5RZ+F+Y1OrDhuOCEInRMA3x74XdBtggJcj9kOeInz0WE+LgCPDkZFlBYJw==",
++      "optional": true,
++      "engines": {
++        "node": ">=12.0.0"
++      }
++    },
+     "node_modules/svgo": {
+       "version": "2.8.0",
+       "resolved": "https://registry.npmjs.org/svgo/-/svgo-2.8.0.tgz",
+@@ -43677,6 +43835,14 @@
+       "resolved": "https://registry.npmjs.org/text-hex/-/text-hex-1.0.0.tgz",
+       "integrity": "sha512-uuVGNWzgJ4yhRaNSiubPY7OjISw4sw4E5Uv0wbjp+OzcbmVU/rsT8ujgcXJhn9ypzsgr5vlzpPqP+MBBKcGvbg=="
+     },
++    "node_modules/text-segmentation": {
++      "version": "1.0.3",
++      "resolved": "https://registry.npmjs.org/text-segmentation/-/text-segmentation-1.0.3.tgz",
++      "integrity": "sha512-iOiPUo/BGnZ6+54OsWxZidGCsdU8YbE4PSpdPinp7DeMtUJNJBoJ/ouUSTJjHkh1KntHaltHl/gDs2FC4i5+Nw==",
++      "dependencies": {
++        "utrie": "^1.0.2"
++      }
++    },
+     "node_modules/thenify": {
+       "version": "3.3.1",
+       "resolved": "https://registry.npmjs.org/thenify/-/thenify-3.3.1.tgz",
+@@ -44795,6 +44961,14 @@
+         "node": ">= 0.4.0"
+       }
+     },
++    "node_modules/utrie": {
++      "version": "1.0.2",
++      "resolved": "https://registry.npmjs.org/utrie/-/utrie-1.0.2.tgz",
++      "integrity": "sha512-1MLa5ouZiOmQzUbjbu9VmjLzn1QLXBhwpUa7kdLUQK+KQ5KA9I1vk5U4YHe/X2Ch7PYnJfWuWT+VbuxbGwljhw==",
++      "dependencies": {
++        "base64-arraybuffer": "^1.0.2"
++      }
++    },
+     "node_modules/uuid": {
+       "version": "9.0.1",
+       "resolved": "https://registry.npmjs.org/uuid/-/uuid-9.0.1.tgz",
+diff --git a/package.json b/package.json
+index 013e40117..a15d78745 100644
+--- a/package.json
++++ b/package.json
+@@ -158,5 +158,9 @@
+       "admin/",
+       "packages/"
+     ]
++  },
++  "dependencies": {
++    "html2canvas": "^1.4.1",
++    "jspdf": "^4.2.1"
+   }
+ }

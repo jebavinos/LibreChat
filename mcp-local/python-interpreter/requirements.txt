@@ -3,3 +3,8 @@ numpy>=1.26.0
 requests>=2.31.0
 openpyxl>=3.1.2
 PyPDF2>=3.0.0
+pypdf
+pymupdf
+pdfminer.six
+camelot-py
+tabula-py

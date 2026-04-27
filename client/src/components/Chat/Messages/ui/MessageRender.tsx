@@ -219,6 +219,13 @@ const MessageRender = memo(
                   handleFeedback={handleFeedback}
                   isLast={isLast}
                 />
+                {(msg.tokenCount ?? 0) > 0 && (
+                  <div className="flex h-5 items-center bg-transparent mt-[-1px]">
+                    <span className="text-xs text-gray-400 dark:text-gray-500">
+                      {msg.tokenCount} tokens
+                    </span>
+                  </div>
+                )}
               </SubRow>
             )}
           </div>

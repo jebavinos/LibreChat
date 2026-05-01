@@ -9,7 +9,7 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import pg from "pg";
 import { KiteConnect } from "kiteconnect";
-import { spawn } from "child_process";
+import { spawn, execSync } from "child_process";
 import fs from "fs";
 import fsPromises from "fs/promises";
 import path from "path";
@@ -237,7 +237,16 @@ function startTokenMaintenance() {
     }, INTERVAL);
 }
 
-async function startLiveTicker(duration = 0) {
+async function startLiveTicker(duration = 0, symbols?: string, tokens?: string) {
+  // Try to kill any existing ticker processes first so port 6789 isn't blocked
+  try {
+      execSync('pkill -f live-data-ticker', { stdio: 'ignore' });
+      console.error('[LiveData] Killed existing ticker processes.');
+      await new Promise(resolve => setTimeout(resolve, 500)); // give it half a sec to free the port
+  } catch (e) {
+      // Ignored, maybe pkill not found or no process to kill
+  }
+
   // Use compiled JS if available, fallback to TS via tsx if not
   let tickerScriptPath = path.resolve(__dirname, "live-data-ticker.js");
   let execCmd = "node";
@@ -271,6 +280,19 @@ async function startLiveTicker(duration = 0) {
   } catch (e) {}
   
   const childEnv = { ...process.env, DEBUG: "true" };
+  
+  // Override or remove inherited environment variables so they don't interfere
+  if (symbols) {
+      childEnv.SUBSCRIBE_SYMBOLS = symbols;
+  } else {
+      delete childEnv.SUBSCRIBE_SYMBOLS;
+  }
+  
+  if (tokens) {
+      childEnv.SUBSCRIBE_TOKENS = tokens;
+  } else {
+      delete childEnv.SUBSCRIBE_TOKENS;
+  }
   
   const child = spawn(execCmd, execArgs, {
     cwd: path.dirname(tickerScriptPath),
@@ -364,12 +386,15 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "start_live_ticker",
-        description: "Start the Live Data Ticker background process. Optionally read the logs for a few seconds to verify output.",
+        description: "Start the Live Data Ticker background process. You MUST specify either 'symbols' or 'tokens' to subscribe to live market data.",
         inputSchema: {
           type: "object",
           properties: {
-             duration: { type: "number", description: "Duration in seconds to wait and capture logs. Default 0 (background only)." }
-          }
+             duration: { type: "number", description: "Duration in seconds to wait and capture logs. Default 0 (background only)." },
+             symbols: { type: "string", description: "Comma-separated list of symbols to subscribe to (e.g. 'RELIANCE,HDFCBANK'). The LLM MUST provide this to see live data." },
+             tokens: { type: "string", description: "Comma-separated list of instrument tokens to subscribe to." }
+          },
+          required: ["symbols"]
         }
       },
       {
@@ -553,8 +578,25 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     // ---------------- START LIVE TICKER ----------------
     if (name === "start_live_ticker") {
-        const { duration } = args || {};
-        return await startLiveTicker(duration || 0);
+        let { duration, symbols, tokens } = args as { duration?: number; symbols?: string; tokens?: string } || {};
+        // Instead of hanging the MCP tool for the requested duration (which causes timeouts),
+        // we only wait 3 seconds to confirm startup, then return connection details.
+        const waitTime = 3;
+        const result = await startLiveTicker(waitTime, symbols, tokens);
+        
+        if (result.content && result.content[0] && result.content[0].text) {
+            result.content[0].text += `\n\n` +
+                `========================================\n` +
+                `SUCCESS: TICKER STARTED IN BACKGROUND.\n` +
+                `The live data is now streaming locally.\n` +
+                `To process this live stream, you MUST use the python-interpreter tool to run a script that does the following:\n` +
+                `1. Connect to SSE URL: http://127.0.0.1:6789/ticks\n` +
+                `2. Use requests.get(url, stream=True) and iterate over r.iter_lines()\n` +
+                `3. Filter for 'data: ' and parse the JSON string\n` +
+                `4. Run your logic for the requested duration (${duration || 'desired time'}), then break the loop / stop the script.\n` +
+                `========================================`;
+        }
+        return result;
     }
 
     // ---------------- REFRESH LIVE TOKEN ----------------

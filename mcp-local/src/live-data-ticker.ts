@@ -5,6 +5,7 @@ import fs from 'fs';
 import { Pool } from 'pg';
 import { spawn } from 'child_process';
 import path from 'path';
+import http from 'http';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -48,6 +49,9 @@ class LiveDataManager {
   private ticker: any = null;
   private config: LiveDataConfig;
   private pool: Pool | null = null;
+  // SSE clients
+  private sseClients: Set<http.ServerResponse> = new Set();
+  private sseServer: http.Server | null = null;
   private reconnecting = false;
   private reconnectTimer: NodeJS.Timeout | null = null;
   private tokensToSubscribe: number[] = [];
@@ -100,6 +104,12 @@ class LiveDataManager {
 
   private async resolveTokens(): Promise<number[]> {
     const tokens: number[] = [];
+
+    // Debug: show incoming config and environment values used for resolution
+    logger.debug(`resolveTokens() config.subscribeTokens=${this.config.subscribeTokens}`);
+    logger.debug(`resolveTokens() config.subscribeSymbols=${this.config.subscribeSymbols}`);
+    logger.debug(`ENV SUBSCRIBE_TOKENS=${process.env.SUBSCRIBE_TOKENS}`);
+    logger.debug(`ENV SUBSCRIBE_SYMBOLS=${process.env.SUBSCRIBE_SYMBOLS}`);
     
     // 1. Direct tokens
     if (this.config.subscribeTokens) {
@@ -151,6 +161,56 @@ class LiveDataManager {
     }
 
     this.connectTicker(accessToken);
+
+    // Start SSE server so other processes (python-interpreter) can subscribe
+    try {
+      this.startSseServer();
+    } catch (e) {
+      logger.error('Failed to start SSE server', e);
+    }
+  }
+
+  private startSseServer() {
+    if (this.sseServer) return;
+
+    const port = parseInt(process.env.LIVE_TICKER_PORT || '6789', 10);
+    this.sseServer = http.createServer((req, res) => {
+      if (!req.url) return res.end();
+      const url = req.url.split('?')[0];
+      if (url !== '/ticks') {
+        res.writeHead(404, { 'Content-Type': 'text/plain' });
+        return res.end('Not Found');
+      }
+
+      // Setup SSE headers
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        Connection: 'keep-alive',
+      });
+      res.write(': connected\n\n');
+
+      this.sseClients.add(res);
+
+      req.on('close', () => {
+        try { this.sseClients.delete(res); } catch (e) {}
+      });
+    });
+
+    this.sseServer.listen(port, () => {
+      logger.info(`SSE server listening on http://0.0.0.0:${port}/ticks`);
+    });
+  }
+
+  private broadcastTick(tick: LiveDataTick) {
+    const payload = JSON.stringify(tick);
+    for (const res of Array.from(this.sseClients)) {
+      try {
+        res.write(`data: ${payload}\n\n`);
+      } catch (e) {
+        try { this.sseClients.delete(res); } catch (er) {}
+      }
+    }
   }
 
   private connectTicker(accessToken: string) {
@@ -207,7 +267,12 @@ class LiveDataManager {
   private onTicks(ticks: LiveDataTick[]) {
     // Only log ticks for streaming purposes
     // Output ticks as JSON lines so they can be parsed by the consumer (MCP tool)
-    ticks.forEach(t => console.log(JSON.stringify(t)));
+    ticks.forEach(t => {
+      const line = JSON.stringify(t);
+      console.log(line);
+      // broadcast to SSE clients
+      try { this.broadcastTick(t); } catch (e) { logger.debug('Broadcast error: ' + e); }
+    });
 
     // DB Insertion has been disabled as per requirements
     // if (this.pool) {
@@ -340,6 +405,11 @@ if (process.argv[1] === __filename) {
         subscribeSymbols: process.env.SUBSCRIBE_SYMBOLS,
         dbUrl: undefined // Disable DB
     });
+
+    // Allow overriding SSE port via env for python-interpreter
+    if (process.env.LIVE_TICKER_PORT) {
+      logger.info(`LIVE_TICKER_PORT set to ${process.env.LIVE_TICKER_PORT}`);
+    }
 
     manager.start().catch(err => {
         logger.error('Fatal error starting LiveDataManager', err);

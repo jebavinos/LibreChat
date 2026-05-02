@@ -1,4 +1,6 @@
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+const fs = require('fs');
+
+const content = `import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
   CallToolRequestSchema,
@@ -83,7 +85,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             filename: { type: "string", description: "The output html filename, e.g., 'summary_dashboard.html'" },
             dashboard_config: { type: "string", description: "Optional JSON string defining the UI layout when layout='custom_dashboard'. Use this to build 12-column CSS grid layouts where you control placement, sizing, and content. The root must have a 'sections' array. **CRITICAL: Every section object MUST have a 'section_heading' string property properly labeling the module.** Each section can have: 'type' ('text', 'kpi_grid', 'chart_grid', 'table', 'summary', 'raw_html'). You MUST use 'wrapper_class' to explicitly set size and position (e.g. 'col-span-12 md:col-span-8' for a wide section, or 'col-span-12 md:col-span-4' for a smaller side section). Use 'grid_class' in 'kpi_grid' to specify box sizing (e.g. 'grid grid-cols-1 gap-4' or 'grid grid-cols-2 lg:grid-cols-4'). For 'table': 'headers' (array), 'rows' (array of arrays). For 'raw_html': 'html' (string). The LLM MUST intelligently color-code items (e.g. kpi_grid) using 'style': 'green' (positive), 'red' (negative), 'amber' (warning), 'purple' (highlight). Also, for text and summary blocks, use HTML tags (<ul>, <li>, <b>, <i>, <br>) directly in the text content to provide indentation, highlights, bullet points, and high readability." }
           },
-          required: ["title", "data_source", "layout", "filename","dashboard_config"]
+          required: ["title", "data_source", "layout", "filename"]
         }
       }
     ],
@@ -128,12 +130,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           cwd: desiredCwd
         };
 
-        const code = `
+        const code = \`
 import pkg_resources
 installed_packages = pkg_resources.working_set
 installed_packages_list = sorted(["%s==%s" % (i.key, i.version) for i in installed_packages])
 print("\\n".join(installed_packages_list))
-`;
+\`;
         
         const messages = await PythonShell.runString(code, options);
         return {
@@ -149,7 +151,7 @@ print("\\n".join(installed_packages_list))
           content: [
             {
               type: "text",
-              text: `Error listing packages: ${error.message}`,
+              text: \`Error listing packages: \${error.message}\`,
             },
           ],
           isError: true,
@@ -175,13 +177,13 @@ print("\\n".join(installed_packages_list))
     
     // Add import sys if multithreaded and set recursion limit higher if needed
     if (request.params.name === "run_python_multithreaded") {
-        code = `
+        code = \`
 import sys
 sys.setrecursionlimit(2000)
 import threading
 import multiprocessing
 # Ensure sufficient resources
-` + code;
+\` + code;
     }
 
     let options: any;
@@ -252,7 +254,7 @@ import multiprocessing
 
               // Create temporary file
               const randomName = crypto.randomBytes(8).toString('hex');
-              const tempFileName = `mcp_python_${randomName}.py`;
+              const tempFileName = \`mcp_python_\${randomName}.py\`;
               const tempDir = os.tmpdir();
               const tempFilePath = path.join(tempDir, tempFileName);
               
@@ -278,10 +280,10 @@ import multiprocessing
               if (timeLimit > 0) {
                   timer = setTimeout(() => {
                       if (pyshell.childProcess) {
-                          console.error(`[Python] Timeout reached (${timeLimit}ms). Killing process ${pyshell.childProcess.pid}`);
+                          console.error(\`[Python] Timeout reached (\${timeLimit}ms). Killing process \${pyshell.childProcess.pid}\`);
                           pyshell.childProcess.kill(); 
                       }
-                      reject(new Error(`Execution timed out after ${timeLimit}ms`));
+                      reject(new Error(\`Execution timed out after \${timeLimit}ms\`));
                   }, timeLimit);
               }
 
@@ -305,7 +307,7 @@ import multiprocessing
 
       // Check if the code generated any files in /app/data, /app/plots or /tmp and create/copy a link
       // Supports /app/data/file.png, /app/plots/file.png and /tmp/file.png
-      const filePattern = /((\/app\/data\/|\/app\/plots\/|\/tmp\/))([\w-]+\.(png|jpg|jpeg|gif|svg|html))/g;
+      const filePattern = /((\\/app\\/data\\/|\\/app\\/plots\\/|\\/tmp\\/))([\\w-]+\\.(png|jpg|jpeg|gif|svg|html))/g;
       const matchIterator = output.matchAll(filePattern);
       const matches = [...matchIterator];
       
@@ -325,13 +327,13 @@ import multiprocessing
               const path = await import("path");
               const filename = path.basename(fullPath);
               const ext = path.extname(filename).toLowerCase();
-              let servePath = `/data/${filename}`;
+              let servePath = \`/data/\${filename}\`;
 
               // If file is in /app/plots, no need to copy, serve directly if route exists
               // Or copy to /app/data?
               // The user wants /app/plots URL to work.
               if (fullPath.startsWith('/app/plots/')) {
-                  servePath = `/app/plots/${filename}`;
+                  servePath = \`/app/plots/\${filename}\`;
               } else if (fullPath.startsWith('/tmp/')) {
                   // Copy from /tmp to /app/data
                   // Ensure /app/data exists
@@ -345,21 +347,21 @@ import multiprocessing
                           fs.copyFileSync(fullPath, destPath);
                       }
                   } catch (e) {
-                      console.error(`Failed to copy ${fullPath} to ${destPath}:`, e);
+                      console.error(\`Failed to copy \${fullPath} to \${destPath}:\`, e);
                   }
-                  servePath = `/data/${filename}`;
+                  servePath = \`/data/\${filename}\`;
               }
               
               // Append markdown to display the image or link
               // Use a query param to avoid caching if the file updates
               // Use DOMAIN_SERVER to create absolute URL if available
               const domainServer = process.env.DOMAIN_SERVER || '';
-              const fullServePath = domainServer ? `${domainServer}${servePath}` : servePath;
+              const fullServePath = domainServer ? \`\${domainServer}\${servePath}\` : servePath;
 
               if (ext === '.html') {
-                  output += `\n\n[View Interactive Chart](${fullServePath}?t=${Date.now()})`;
+                  output += \`\\n\\n[View Interactive Chart](\${fullServePath}?t=\${Date.now()})\`;
               } else {
-                  output += `\n\n![Generated Image](${fullServePath}?t=${Date.now()})`;
+                  output += \`\\n\\n![Generated Image](\${fullServePath}?t=\${Date.now()})\`;
               }
           }
       }
@@ -374,18 +376,18 @@ import multiprocessing
       };
     } catch (error: any) {
       // If Python execution fails, return the error message
-      let errorMessage = `Error executing Python code:\n${error.message || String(error)}`;
-      errorMessage += `\n\nCWD: ${options?.cwd || (await import("process")).cwd()}`;
+      let errorMessage = \`Error executing Python code:\\n\${error.message || String(error)}\`;
+      errorMessage += \`\\n\\nCWD: \${options?.cwd || (await import("process")).cwd()}\`;
       
       // If we have traceback, use that instead of generic message if possible, or append it
       if (error.traceback) {
-        errorMessage = `Python Traceback:\n${error.traceback}`;
+        errorMessage = \`Python Traceback:\\n\${error.traceback}\`;
       }
 
       // If we have partial logs (stdout before crash), include them
       if (error.logs && Array.isArray(error.logs) && error.logs.length > 0) {
-        const partialOutput = error.logs.join("\n");
-        errorMessage = `Output before error:\n${partialOutput}\n\n${errorMessage}`;
+        const partialOutput = error.logs.join("\\n");
+        errorMessage = \`Output before error:\\n\${partialOutput}\\n\\n\${errorMessage}\`;
       }
 
       return {
@@ -411,7 +413,7 @@ import multiprocessing
 
     const validation = schema.safeParse(request.params.arguments);
     if (!validation.success) {
-      throw new Error(`Invalid arguments: ${validation.error.message}`);
+      throw new Error(\`Invalid arguments: \${validation.error.message}\`);
     }
 
     const { title, data_source, layout, filename, dashboard_config } = validation.data;
@@ -419,7 +421,7 @@ import multiprocessing
     let pythonPath = process.env.PYTHON_PATH || 'python3';
     let desiredCwd = '/app';
 
-    const code = `
+    const code = \`
 import json
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
@@ -744,8 +746,8 @@ def generate_interactive_dashboard(title, data_source, layout, filename, dashboa
     fig.write_html(filepath, include_plotlyjs='cdn')
     print(f"Successfully generated! Here is the dashboard:\\n\\n[{title}](/data/{filename})")
 
-generate_interactive_dashboard(${JSON.stringify(title)}, ${JSON.stringify(data_source)}, ${JSON.stringify(layout)}, ${JSON.stringify(filename)}, ${JSON.stringify(dashboard_config ?? "")})
-`;
+generate_interactive_dashboard(\${JSON.stringify(title)}, \${JSON.stringify(data_source)}, \${JSON.stringify(layout)}, \${JSON.stringify(filename)}, \${JSON.stringify(dashboard_config ?? "")})
+\`;
 
     try {
       const messages = await PythonShell.runString(code, {
@@ -757,13 +759,13 @@ generate_interactive_dashboard(${JSON.stringify(title)}, ${JSON.stringify(data_s
       };
     } catch (error: any) {
       return {
-        content: [{ type: "text", text: `Error generating dashboard: ${error.message}` }],
+        content: [{ type: "text", text: \`Error generating dashboard: \${error.message}\` }],
         isError: true,
       };
     }
   }
 
-  throw new Error(`Tool not found: ${request.params.name}`);
+  throw new Error(\`Tool not found: \${request.params.name}\`);
 });
 
 /*
@@ -779,3 +781,6 @@ main().catch((error) => {
   console.error("Fatal error in main():", error);
   process.exit(1);
 });
+`;
+
+fs.writeFileSync('/opt/LibreChat/LibreChat/mcp-local/python-interpreter/src/index.ts', content, 'utf8');

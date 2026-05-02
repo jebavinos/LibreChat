@@ -38,7 +38,7 @@ async function scrapeUrl(url: string, selector?: string): Promise<string> {
     // with an explicitly provided executable path.
   const getLauncher = async (): Promise<any> => {
       // args common to launches
-      const commonArgs = ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu'];
+      const commonArgs = ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu', '--ignore-certificate-errors'];
 
       // Try to require full puppeteer synchronously so TypeScript won't force module resolution at compile-time
       try {

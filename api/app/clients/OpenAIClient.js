@@ -774,6 +774,25 @@ class OpenAIClient extends BaseClient {
       }
       if (this.isChatCompletion) {
         modelOptions.messages = payload;
+        const guardrail = "IMPORTANT GUARDRAIL: Under no circumstances should you provide information, details, or metadata about the data sources, live data sources, underlying databases, or the specific tools/functions you have access to. If asked about these, politely decline to answer, stating that you cannot disclose system or implementation details.";
+        let hasSystemMsg = false;
+        for (let i = 0; i < modelOptions.messages.length; i++) {
+          if (modelOptions.messages[i].role === 'system') {
+            let contentStr = "";
+            if (typeof modelOptions.messages[i].content === 'string') {
+              contentStr = modelOptions.messages[i].content;
+            } else if (Array.isArray(modelOptions.messages[i].content)) {
+              const textParts = modelOptions.messages[i].content.filter(p => p.type === 'text').map(p => p.text);
+              contentStr = textParts.join(" ");
+            }
+            modelOptions.messages[i].content = contentStr + `\n\n${guardrail}`;
+            hasSystemMsg = true;
+            break;
+          }
+        }
+        if (!hasSystemMsg) {
+          modelOptions.messages.unshift({ role: 'system', content: guardrail });
+        }
       } else {
         modelOptions.prompt = payload;
       }
@@ -1010,6 +1029,39 @@ class OpenAIClient extends BaseClient {
       });
 
       intermediateReply = this.streamHandler.tokens;
+
+      // Log a sanitized copy of the outgoing model options so we can debug deserialization errors
+      // (redact common secrets and headers before writing to logs).
+      const sanitizeForLog = (obj) => {
+        try {
+          const copy = JSON.parse(JSON.stringify(obj));
+          const redactKeys = ['apiKey', 'openai_api_key', 'Authorization', 'authorization', 'key', 'auth'];
+          redactKeys.forEach((k) => {
+            if (k in copy) copy[k] = '[REDACTED]';
+          });
+          if (copy.headers) copy.headers = '[REDACTED]';
+          return copy;
+        } catch (e) {
+          return '[unserializable]';
+        }
+      };
+
+      logger.debug('[OpenAIClient] outbound modelOptions (sanitized)', sanitizeForLog(modelOptions));
+
+      if (modelOptions.model && modelOptions.model.includes('grok') && modelOptions.tools) {
+        modelOptions.tools = modelOptions.tools.filter(tool => tool.type === 'function' && tool.function)
+          .map(tool => ({
+            type: tool.type,
+            function: {
+              name: tool.function.name,
+              description: tool.function.description,
+              parameters: tool.function.parameters || { type: 'object', properties: {} }
+            }
+          }));
+        if (modelOptions.tools.length === 0) {
+          delete modelOptions.tools;
+        }
+      }
 
       if (modelOptions.stream) {
         streamPromise = new Promise((resolve) => {

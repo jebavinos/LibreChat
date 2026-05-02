@@ -89,22 +89,30 @@ export const a: React.ElementType = memo(({ href, children, target, rel }: TAnch
     // Check for interactive chart link from python-interpreter
     return (
       (href.includes('/app/plots/') || href.includes('/data/')) &&
-      href.toLowerCase().includes('.html')
+      href.toLowerCase().split('?')[0].endsWith('.html')
     );
+  }, [href]);
+
+  const fixedHref = useMemo(() => {
+    const baseURL = apiBaseUrl();
+    if (href?.startsWith('/data/') || href?.startsWith('/app/plots/')) {
+      return `${baseURL}${href}`;
+    }
+    return href;
   }, [href]);
 
   if (isInteractiveChart) {
     return (
       <div className="interactive-chart-container relative mb-4 h-[600px] w-full overflow-hidden rounded border border-gray-300 dark:border-gray-600">
         <iframe
-          src={href}
+          src={fixedHref}
           title="Interactive Chart"
-          className="h-full w-full border-none bg-white"
+          className="h-full w-full border-none bg-transparent"
           sandbox="allow-scripts allow-same-origin allow-popups"
         />
         <div className="absolute bottom-0 right-0 bg-white/80 p-2 text-xs text-black dark:bg-black/50 dark:text-white">
           <a
-            href={href}
+            href={fixedHref}
             target="_blank"
             rel="noopener noreferrer"
             className="hover:underline"
@@ -211,14 +219,33 @@ export const img: React.ElementType = memo(({ src, alt, title, className, style 
   const fixedSrc = useMemo(() => {
     if (!src) return src;
 
-    // If it's already an absolute URL or doesn't start with /images/, return as is
-    if (src.startsWith('http') || src.startsWith('data:') || !src.startsWith('/images/')) {
+    // Provide a fallback for local external domains like jvteststock.com if needed,
+    // but typically we let absolute URLs pass through intact.
+    // If it's already an absolute URL or starts with data:, return as is
+    if (src.startsWith('http') || src.startsWith('data:')) {
       return src;
     }
 
-    // Prepend base URL to the image path
-    return `${baseURL}${src}`;
+    // Prepend base URL to the image path if it starts with /images/, /data/, or /app/plots/
+    if (src.startsWith('/images/') || src.startsWith('/data/') || src.startsWith('/app/plots/')) {
+        return `${baseURL}${src}`;
+    }
+    
+    // Otherwise fallback to returning the original source
+    return src;
   }, [src, baseURL]);
+
+  // If the image is a .html file rendered as an image, render an iframe instead
+  if (fixedSrc && fixedSrc.toLowerCase().split('?')[0].endsWith('.html')) {
+    return (
+      <iframe
+        src={fixedSrc}
+        className={className}
+        style={{ ...style, width: '100%', minHeight: '400px', border: 'none', background: 'transparent' }}
+        title={title || alt || 'Interactive Chart'}
+      />
+    );
+  }
 
   return <img src={fixedSrc} alt={alt} title={title} className={className} style={style} />;
 });

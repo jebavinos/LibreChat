@@ -21,7 +21,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Load env
-dotenv.config({ path: path.resolve(__dirname, "../.env") });
+dotenv.config({ path: path.resolve(__dirname, "../../.env") });
 dotenv.config();
 
 // Postgres Pool
@@ -196,7 +196,8 @@ const server = new Server(
 
 // Helper Functions
 async function refreshAuthToken(verbose = false) {
-    const scriptPath = path.resolve(__dirname, "refresh_token.py");
+    const isCompiled = __dirname.endsWith("dist");
+    const scriptPath = isCompiled ? path.resolve(__dirname, "../src/refresh_token.py") : path.resolve(__dirname, "refresh_token.py");
     if (verbose) console.error(`[LiveDataAuth] Starting token refresh via ${scriptPath}...`);
 
     return new Promise((resolve) => {
@@ -488,7 +489,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     // ---------------- SUMMARIZE DATABASE ----------------
     if (name === "summarize_database" || name === "summarise_database") {
       const { table_name } = args || {};
-      const scriptPath = path.resolve(__dirname, "db_summary.py");
+      const isCompiled = __dirname.endsWith("dist");
+      const scriptPath = isCompiled ? path.resolve(__dirname, "../src/db_summary.py") : path.resolve(__dirname, "db_summary.py");
       const argsList = [scriptPath];
       if (table_name) argsList.push(table_name);
 

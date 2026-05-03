@@ -440,9 +440,9 @@ def generate_interactive_dashboard(title, data_source, layout, filename, dashboa
     config_data = {}
     if dashboard_config_json:
         try:
-            config_data = json.loads(dashboard_config_json)
+            config_data = json.loads(dashboard_config_json, strict=False)
         except Exception as e:
-            print("Error parsing dashboard_config:", e)
+            raise ValueError(f"Error parsing dashboard_config: {e}")
 
     if layout == "custom_dashboard" or layout == "html_grid":
         # Start HTML skeleton
